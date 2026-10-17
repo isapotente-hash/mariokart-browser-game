@@ -1,10 +1,10 @@
-# Pocket Circuit · Milestone Two
+# Pocket Circuit · Milestone Three
 
-An original TypeScript / Three.js / Vite kart racer implementing Milestones One and Two on page 9 of [Specification.md](Specification.md). One player races seven seeded AI opponents for three validated laps, with drifting, three functioning items, checkpoint rescue and results. Garden Circuit is the main course; Pocket Loop is the compact verification course.
+An original browser kart racer built with TypeScript, Three.js and Vite. The release implements page 9 of [Specification.md](Specification.md): four courses, twelve racers, eight original drivers, vehicle customization, eight items, special traversal, three modes, local split screen, saves, procedural audio and quality presets. No Nintendo assets or external media are used.
 
-## Run and verify
+## Run
 
-Use **Node.js 24 LTS** and npm. Dependencies are pinned in `package-lock.json`.
+Use Node.js **24 LTS** and npm. The dependency lockfile is committed.
 
 ```sh
 npm ci
@@ -14,106 +14,103 @@ npm run build
 npm run preview
 ```
 
-Open `http://127.0.0.1:4173/mariokart-browser-game/` for production preview and choose **Start race**. The complete static output is in `dist/`, with no runtime backend or secrets. Vite prints the development address; retain the `/mariokart-browser-game/` subpath.
+Production preview: `http://127.0.0.1:4173/mariokart-browser-game/`. Choose **Race setup**, configure a mode and vehicle, then **Start race**. The static output is `dist/`; no runtime server or secrets are required.
 
 ```sh
 npx playwright install chromium
 npm run test:browser
 ```
 
-The browser check serves actual production output, checks the three-second countdown, drives backward to trigger a wrong-way warning, requests rescue, uses item pickups, completes three laps with real keyboard input, checks all eight result rows, and restarts into a clean countdown. It also checks pause, resize, repeated restarts, a single canvas, refresh and absence of console/page/network errors. Playwright controls time without modifying race state; read-only HUD telemetry guides keyboard input.
+Browser checks use the production build, real DOM controls and keyboard driving. `?course=short` uses compact versions of the four release courses for practical completion checks; traversal remains active. Normal play uses the full courses. See [release verification](docs/verification-m3.md) and [Milestone Two verification](docs/verification-m2.md).
+
+## Play
+
+| Mode | Rules |
+| --- | --- |
+| Versus | Choose course, difficulty, 50/100/150/200cc, one to five laps, all/basic/no items, mirror and one or two players. |
+| Grand Prix | Four courses in order, three laps each. Points: 15, 12, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1. Ties use wins, then final-race position. Resume an unfinished local cup or abandon it with confirmation. |
+| Time Trial | One player, no opponents or random boxes, exactly three boosts. Personal bests and optional recorded transform ghosts are local. Comparisons separate course/physics version, vehicle, speed, mirror and assists. |
+
+Finishers retain their crossing order; remaining AI have fifteen seconds after both humans finish. Results explicitly mark unfinished racers DNF. Every lap requires all twelve checkpoints in order and a forward finish crossing. Rescue preserves the required gate and lap count, with a two-second hold. Racing rules do not change with graphics quality.
+
+| Course | Features |
+| --- | --- |
+| Garden Circuit | Hills, an ordinary jump/trick ramp and a grassy inside branch. |
+| Harbour Run | Underwater tunnel with altered drag/grip, moving cargo and an outer pier route. |
+| Sky Foundry | Banked anti-gravity surface, local gravity/camera alignment, glider launch and lower recovery route. |
+| Starlight Causeway | Exposed night road, chained turns, falling/rescue and an alternate boost line. |
+
+Mirror reflects physical geometry, banking and navigation. Gliders open only at marked launches. Ordinary jumps remain jumps; press drift immediately after takeoff for a landing boost. Gliding supports pitch and gentle yaw, bounded lift/descent and a return to the driving surface.
+
+Eight selectable original drivers cover light, medium and heavy profiles. Three chassis, three tyre sets and two gliders alter both the procedural model and physics. Each of the five stats is `clamp(1 + driver + chassis + tyres + glider modifiers, 0.75, 1.30)`. Sail provides more lift; Delta trades lift for speed. All 144 combinations have validated bounded stats.
 
 ## Controls
 
-| Key | Action |
-| --- | --- |
-| W / Up | Accelerate |
-| S / Down | Brake, then hold to reverse |
-| A / Left, D / Right | Steer |
-| Space | Hop; hold while steering at speed to drift |
-| E | Use active item, then promote reserve |
-| Down + E (or S + E) | Launch a banana or shell rearward |
-| F | Rescue to the last valid checkpoint, with a two-second hold |
-| R | Restart the entire race from the countdown |
-| Q (hold) | Rear view |
-| Escape | Pause / resume the whole race |
+| Action | Player 1 | Player 2 |
+| --- | --- | --- |
+| Accelerate / brake-reverse | W / S | I / K |
+| Steer | A / D | J / L |
+| Hop / hold drift | Space | U |
+| Item | E | Y |
+| Rear view (hold) | Q | O |
+| Rescue | F | H |
+| Glider dive / pull up | Up / Down | N / M |
+| Shared pause / restart | Escape / R | Escape / R |
 
-Tab and Enter operate the menus. Controls remain available from pause. Focus loss and hidden tabs pause the countdown/race and clear held keys. Resume explicitly to continue. Sound cues unlock after Start race; **Sound on/off** mutes them. Audio denial never blocks racing.
+Player One also has arrow-key driving shortcuts when those keys are not assigned to Player Two. Settings supports remapping, auto-acceleration, edge steering assist and separate input assignments. Keyboard rollover can limit two players on one keyboard.
 
-## Race and item rules
+Gamepad: A/RT accelerate, B/LT brake, left stick steer/pitch, X/RB drift, LB item, Y rear view, Back rescue and Start shared pause. Two gamepads or keyboard plus gamepad are supported. Disconnect pauses and offers reconnection or reassignment. Large multi-touch controls support one landscape viewport; touch split screen is outside the target. The on-screen **Pause** button opens shared pause. Settings and the control handbook are available there. Focus loss/hidden tabs pause and clear held keys; resume explicitly.
 
-Eight visible grid positions lead into 3, 2, 1, GO. Cars cannot move and the race clock does not advance during the countdown. The first forward finish-line crossing starts lap one; it does not award a lap. Each lap requires all twelve gates in order and a forward crossing of the finish. Wide crossings, backward crossings, skipped gates, repeated finish crossings and teleports cannot award laps. A wrong-way message appears after sustained backward course travel.
+## Items and handling
 
-Blue boxes award items; the larger centre boxes fill both available slots. Inventory holds active and reserve with a short visible draw period. E consumes active and automatically promotes reserve; there is no swapping. Stable pickup IDs, four-second box respawns and racer cooldowns prevent repeated overlapping awards. AI follows exactly the same pickup, inventory, collision, damage and checkpoint rules.
+Two slots hold active and reserve. Using active promotes reserve; no free swapping. Pickups have stable IDs, draw delay, capacity checks and respawn cooldowns. Brake + Item launches eligible items rearward. AI uses the same rules.
 
-- **Banana:** drop a visible trap ahead, or rearward with Down + E. It arms after 0.6 seconds, lasts at most 25 seconds, and is consumed on a successful hit.
-- **Shell:** launch a green projectile with swept/substepped collision, reflective barrier bounces, eight-second lifetime and four-bounce limit.
-- **Mushroom:** gain a two-second acceleration / speed boost, including reduced grass penalty. Boost durations use a bounded maximum rather than stacking without limit.
+- Trap: delayed arming, owner grace and bounded lifetime.
+- Bouncing shell: swept collision, barrier reflection and bounded bounces/lifetime.
+- Boost: two seconds of increased acceleration/speed and reduced grass penalty.
+- Homing seeker: course guidance, limited turn rate and visible/audio warning.
+- Timed explosive: visible fuse, short travel, radius hit once per racer.
+- Shield burst: clears nearby threats and provides a three-second defense window.
+- Invincibility: seven seconds of immunity and a moderate speed benefit.
+- Leader strike: route-following attack on the leading eligible opponent, advance warning and shield counter.
 
-Hits cause a short visible spin, slowdown, loss of up to three coins and 2.5 seconds of damage immunity. Owners have a 0.8-second launch grace period; after that their own hazards can hit them. Transient objects use a fixed 64-object pool and are cleared on restart. Weighted item tables favor traps near the front and recovery boosts farther behind; shells are excluded during the opening three seconds.
+Weighted draws favor defense near the front and recovery behind. High-impact items have opening restrictions and low weights. Hits apply bounded spin/slowdown, up to three lost coins and brief immunity. Coins cap at ten and add 0.3% top speed each. Blue/orange/purple drift stages charge at 0.7/1.5/2.5 seconds and also use shapes/text. Release for a boost. Hits, rescue and severe impacts cancel charge.
 
-Coins respawn after six seconds, cap at ten and add 0.3% top speed each. Race coins are session-only. Hold a valid on-road drift to charge **one blue diamond at 0.7 s, two orange at 1.5 s, three purple at 2.5 s**, then release Space for the corresponding mini-turbo. Shapes and labels accompany colors. Hits, severe barrier impacts, invalid movement and rescue cancel charge.
+## Settings and local records
 
-F returns to the last validated gate facing forward, preserves the next required checkpoint and lap count, and holds the kart for two seconds while the field and race clock continue. Recovery grants temporary immunity. It never advances progress. AI uses the same rescue after six seconds without meaningful validated progress; normal seeded races complete without relying on rescue.
+Settings includes low/medium/high graphics, automatic/side/stacked split, reduced camera motion, HUD scale, three audio volumes, mute, assists, inputs and touch controls. Quality controls pixel ratio, shadows, particles, draw distance and decoration density. Two players share one 60 Hz simulation, independent cameras, rear views, inventories and HUDs.
 
-HUD: position, current lap / three, race clock, coins, active/reserve items, all racers on the mini-map, speed, surface, drift stage, wrong-way and rescue/damage/boost feedback. Finish order is locked by interpolated crossing time, including simultaneous crossings within a simulation step. When the player finishes, opponents continue for up to fifteen seconds. Results list accepted finishers first, then explicitly mark unfinished racers **DNF** in validated-progress order. Race again creates a fresh grid, countdown, inventory, pickups, projectiles, clocks and AI state.
+Version 3 localStorage stores settings, garage currency, earned badges, cup progress and personal bests. Known schemas migrate; invalid values are sanitized. Larger ghosts use IndexedDB with memory fallback. Storage denial never blocks playing. Export/import small progress JSON from Settings; ghosts remain in the local database. Reset progress requires confirmation and retains settings. There is no global leaderboard.
 
-## Architecture and tuning
+Audio unlocks on Start and includes original generated music, engine pitch, drift, pickups, impacts, item warnings, countdown and finish cues. Master/music/effects volumes and mute persist. Pause suspends audio; unavailable audio does not block racing.
 
-```text
-src/core/          Browser lifecycle, fixed-step timing, seeded randomness
-src/gameplay/      Race, racer state, controller, checkpoints, ranking, rescue
-src/ai/            Sampled racing-line driver and seeded traits
-src/items/         Two-slot inventory, pickups, trap/shell/boost world
-src/rendering/     Procedural scene, eight kart models, pooled item visuals, camera
-src/ui/            DOM menus, HUD, countdown, results
-src/platform/      Keyboard, capabilities, original Web Audio cues
-src/data/          Shared types, typed configuration, item definitions/weights
-src/tracks/        Course samples, surface queries, checkpoints and spawn grid
-public/assets/     Asset notes (no external media)
-tests/             Pure simulation checks and production browser smoke test
-.github/workflows/ PR validation and Pages deployment
-```
+## Architecture and verification
 
-Simulation is independent of Three.js and runs at fixed 60 Hz, at most six catch-up steps per rendered frame. Rendering interpolates positions; paused states freeze simulation and sound. Distances are metres and time is seconds. `src/data/config.ts` centralizes limits and timing; normal forward cap is 27 m/s, reverse 8 m/s, grass 13 m/s, and boosts add up to 8 m/s. Seed 4782 generates scenery and item choices; each AI has a stable seed for pace, reaction time, aggression, lane preference, item delay and drift confidence. No rubber-banding, progress shortcuts or collision bypasses are used.
+`src/data` contains content and balance; `src/tracks` supplies geometry, local frames and collision queries; `src/gameplay` owns physics, race, traversal and mode sessions; `src/ai` and `src/items` share that simulation. `src/rendering` owns procedural visuals and cameras, `src/platform` input/audio/save/ghost adapters, and `src/ui` DOM menus and HUDs. Seeded simulation runs at fixed 60 Hz with bounded catch-up and interpolation. Spatial track caches, instanced scenery and fixed transient pools limit work; course swaps dispose geometry/materials and teardown removes listeners/audio nodes.
 
-AI samples farther ahead as speed increases, brakes for curvature, adjusts its line for slower karts / hazards, holds overtaking lane choices to prevent oscillation, and uses a bounded response delay. Compact-course target speeds are lower to preserve the same physical controller around tighter corners. Current seeded races last approximately one minute on Pocket Loop and a little over one minute on Garden Circuit; the final two-to-four-minute course tuning target remains for later course expansion.
+`npm test` covers progress/finish locking, fixed-step timing, inventory, all item systems, saves, ghosts, cup scoring, independent inputs and physical course runs. Browser checks exercise menu-to-race-to-results paths, real keyboard driving and saved data. Development-only testing can grant any item with `document.dispatchEvent(new CustomEvent('kart:force-item', { detail: 'homing' }))`; valid names are `banana`, `shell`, `mushroom`, `homing`, `explosive`, `shield`, `invincibility`, `leader`. Production contains no writable force-item hook. `?debug` enables development telemetry.
 
-The flat course shares samples across visuals, collision, progress, rescue and AI. The camera stays above ground; general obstacle occlusion avoidance is deferred. Restart reuses the renderer and render pools; course changes dispose old geometry, materials and instances. All listeners and audio resources are released on teardown. `?debug` enables development diagnostics. To force an item in **development only**, use `document.dispatchEvent(new CustomEvent('kart:force-item', { detail: 'shell' }))` in the console; `banana` and `mushroom` also work. Production builds contain no writable force-item hook. `?course=short` selects Pocket Loop directly.
+Initial HTML/CSS/JavaScript transfer is approximately **187 kB gzip**, without external assets. This is a bundle measurement. Tests use Windows Chromium with software SwiftShader; desktop 1080p/60 fps and physical mobile 30 fps targets, real controllers, Firefox/Safari/Edge and screen-reader sessions remain unmeasured. Hardware rendering benchmarks must be reported separately from accelerated-clock verification.
 
-## Verification and limitations
+## Publish to GitHub Pages
 
-See [Milestone Two verification](docs/verification-m2.md) for results and screenshots. Tests cover checkpoints, spawn safety, 30/60/120 fps timing, bounded catch-up, inventory promotion, weighted draws, pickup cooldowns, coin cap, hit immunity, item reflection/hits/lifetime, boost effects, drift stages, rescue, validated ranking, finish locking, DNF timeout, full seeded races and restart.
+Configured repository: [isapotente-hash/mariokart-browser-game](https://github.com/isapotente-hash/mariokart-browser-game).
 
-Milestone Three features remain out of scope: four release courses, twelve racers, driver/vehicle selection, additional items, traversal, game modes, split screen, gamepads, touch driving, persistent settings/saves, full engine/music audio and quality presets. Remapping and assists are not yet exposed. The original test course is flat; ramps/tricks are deferred. This is a desktop keyboard / WebGL 2 vertical slice. Real GPU frame-rate targets, mobile, Firefox, Safari, Edge and screen-reader sessions remain unmeasured.
+1. Push the reviewed milestone to `main`.
+2. In repository **Settings → Pages**, select **GitHub Actions** as the source.
+3. The **Deploy game to GitHub Pages** workflow installs with `npm ci`, typechecks, runs simulation tests, builds and runs production browser checks before uploading `dist`.
+4. Find the actual published URL in the successful workflow's `github-pages` environment. Later pushes update the game. Manual dispatch is also supported; PRs validate separately.
 
-## GitHub Pages
-
-Configured repository: [isapotente-hash/mariokart-browser-game](https://github.com/isapotente-hash/mariokart-browser-game). Push a reviewed milestone to `main` to trigger deployment; local implementation does not itself publish a new milestone.
-
-1. Select **Settings → Pages → Source → GitHub Actions** in the repository.
-2. Push to `main` or manually run **Deploy game to GitHub Pages**.
-3. Find the real published address in the successful workflow's `github-pages` environment. Later pushes update the game.
-
-Actions uses Node 24, `npm ci`, type checks, unit tests, build and production browser verification before uploading `dist`. Only deployment receives `pages: write` and `id-token: write`; builds / PR validation use `contents: read`. PRs validate separately without deployment. The exact base is in `vite.config.ts`, default `/mariokart-browser-game/`. The deploy workflow supplies `VITE_BASE_PATH` from the repository name. Use `/` for an account site or custom domain. Imported code/styles use Vite-managed paths; future runtime media must use `import.meta.env.BASE_URL`. Update `playwright.config.ts` if changing the test subpath. See [Vite's Pages documentation](https://vite.dev/guide/static-deploy.html#github-pages).
-
-PowerShell build overrides:
-
-```powershell
-$env:VITE_BASE_PATH = '/'
-$env:VITE_GAME_TITLE = 'Your Kart Game'
-npm run build
-Remove-Item Env:VITE_BASE_PATH, Env:VITE_GAME_TITLE
-```
+Node 24 is used locally and in Actions. Only the deployment job receives `pages: write` and `id-token: write`; build/PR jobs have `contents: read`. Configure `base` in `vite.config.ts` or set `VITE_BASE_PATH`: `/mariokart-browser-game/` for this project site, `/` for an account site/custom domain. The workflow derives the base from the repository name. Imports use Vite-managed asset paths; future runtime media must use `import.meta.env.BASE_URL`. Update the test base in `playwright.config.ts` if changing the deployment subpath.
 
 ## Assets and troubleshooting
 
-Every model, material, UI graphic and sound cue is original procedural source; fonts are system fonts. No Nintendo assets or external media/font requests are used. Sound is a small set of generated cues, not the full music/engine system. Initial HTML/CSS/JS output is about **158 kB gzip**; this is a bundle measurement, not a network/frame-rate guarantee. Rendering caps pixel ratio at 1.75, instances trees and uses a single 1024-square shadow map. Desktop 60 fps / mobile 30 fps performance targets remain unmeasured.
+All models, scenery, icons, effects and sounds are original procedural source. Fonts are system fonts; no media download is required.
 
-- **Blank screen:** use the correct subpath and enable hardware acceleration / WebGL 2. Unsupported graphics receive an explanatory screen.
-- **Missing assets:** verify `VITE_BASE_PATH` and serve `dist` with `npm run preview`; do not open it using `file://`.
-- **No sound:** click Start race, turn Sound on and allow browser audio. Music/engine audio is not implemented.
-- **Stale data:** hard-refresh after deployment. There is no service worker or persistent save yet.
-- **Paused after tab switching:** focus the page and explicitly resume.
-- **Lost graphics context:** reload using the displayed recovery message; automatic restoration is deferred.
-- **Browser test connection failure:** permit loopback sockets for Vite and Chromium in restricted environments.
+- Blank screen: enable hardware acceleration/WebGL 2 and use the correct subpath. Unsupported graphics show an explanatory screen.
+- Missing assets: verify `VITE_BASE_PATH`; serve `dist` with preview instead of opening `file://`.
+- Muted audio: Start a race, check mute/master/music/effects controls and browser audio permission.
+- Stale browser data: hard-refresh after deployment. Export local progress before resetting it. There is no service worker.
+- Paused after switching tabs: focus the game and explicitly resume.
+- Lost graphics context: use the displayed reload guidance. Automatic restoration is deferred.
+- Browser test cannot connect: permit loopback sockets for Vite and Chromium in restricted environments.

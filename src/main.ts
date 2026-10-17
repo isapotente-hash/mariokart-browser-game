@@ -13,7 +13,7 @@ function showFailure(message: string): void {
 }
 
 if (!graphicsSupport()) {
-  showFailure('This playground needs WebGL 2. Try a recent desktop Chrome, Edge, Firefox or Safari with hardware acceleration enabled. A keyboard is required to drive.');
+  showFailure('This playground needs WebGL 2. Try a recent browser with hardware acceleration enabled. Driving supports keyboard, gamepad or single-player touch controls.');
 } else {
   try {
     const game = new Game(root);

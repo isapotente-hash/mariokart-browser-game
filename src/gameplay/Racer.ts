@@ -9,5 +9,6 @@ export interface Racer {
   previous: KartState; grid: Pose; input: DrivingInput;
   coins: number; pickupCooldown: number; rescueRemaining: number; rescues: number;
   wrongWayTime: number; finishTime: number | null; finishPlace: number | null; distance: number;
+  warning: '' | 'homing' | 'leader'; trialBoosts: number;
 }
 export interface ResultRow { id: string; name: string; place: number; time: number | null; coins: number; finished: boolean }

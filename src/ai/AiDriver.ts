@@ -1,6 +1,7 @@
 import { seededRandom } from '../core/random';
 import type { CourseDefinition, DrivingInput, Point } from '../data/types';
 import { config } from '../data/config';
+import type { Difficulty } from '../data/options';
 import type { Racer } from '../gameplay/Racer';
 import { poseAt, sampleTrack } from '../tracks/course';
 
@@ -8,7 +9,7 @@ const angleDifference = (a: number, b: number) => Math.atan2(Math.sin(a - b), Ma
 
 export class AiDriver {
   readonly traits: { pace: number; reaction: number; aggression: number; lane: number; itemDelay: number; driftConfidence: number };
-  behavior: 'normal' | 'overtaking' | 'recovering' = 'normal';
+  behavior: 'normal' | 'overtaking' | 'recovering' | 'airborne' = 'normal';
   private reactionTimer = 0;
   private laneTimer = 0;
   private lane = 0;
@@ -19,9 +20,11 @@ export class AiDriver {
   private noProgress = 0;
   private bestDistance = -Infinity;
   private cached: DrivingInput = { throttle: true, brake: false, steering: 0 };
-  constructor(seed: number) {
+  constructor(seed: number, difficulty: Difficulty = 'normal') {
     const random = seededRandom(seed);
     this.traits = { pace: 0.9 + random() * 0.15, reaction: 0.08 + random() * 0.07, aggression: random(), lane: (random() - 0.5) * 0.7, itemDelay: 1.2 + random() * 1.2, driftConfidence: 0.5 + random() * 0.5 };
+    this.traits.pace *= difficulty === 'easy' ? 0.82 : difficulty === 'hard' ? 1.09 : 1;
+    this.traits.reaction *= difficulty === 'easy' ? 1.5 : difficulty === 'hard' ? 0.7 : 1;
     this.itemTimer = this.traits.itemDelay;
   }
   read(course: CourseDefinition, racer: Racer, opponents: readonly Racer[], dt: number, hazards: readonly Point[] = []): DrivingInput {
@@ -39,7 +42,7 @@ export class AiDriver {
     if (this.reactionTimer <= 0) {
       this.reactionTimer = this.traits.reaction;
       const road = sampleTrack(course, state);
-      const compact = course.id === 'pocket-loop';
+      const compact = course.compact;
       const lookAhead = (compact ? 1.8 : 3) + Math.abs(state.speed) * (compact ? 0.34 : 0.44);
       const stoppingDistance = state.speed ** 2 / (2 * config.kart.braking);
       const hazard = hazards.find((point) => {
@@ -65,14 +68,15 @@ export class AiDriver {
         this.behavior = 'overtaking';
       }
       this.lane += Math.max(-0.2, Math.min(0.2, this.targetLane - this.lane));
-      const target = poseAt(course, road.progress + lookAhead);
-      target.x += Math.cos(target.heading) * this.lane; target.z -= Math.sin(target.heading) * this.lane;
+      const target = poseAt(course, road.progress + lookAhead, road.route);
+      const targetFrame = sampleTrack(course, target);
+      target.x += targetFrame.right.x * this.lane; target.z += targetFrame.right.z * this.lane;
       const error = angleDifference(Math.atan2(target.x - state.x, target.z - state.z), state.heading);
       const near = poseAt(course, road.progress + lookAhead * 0.5);
       const far = poseAt(course, road.progress + lookAhead + (compact ? 3 : 7));
       const curvature = Math.abs(angleDifference(far.heading, near.heading)) / (lookAhead * 0.5 + (compact ? 3 : 7));
       // Maximum yaw speed bounds the corner speed; look farther ahead to brake in time.
-      let targetSpeed = Math.min((compact ? 8.5 : 21) * this.traits.pace, 0.95 / Math.max(0.01, curvature));
+      let targetSpeed = Math.min((compact ? 8.5 : 21) * this.traits.pace * racer.controller.speedScale * racer.controller.stats.speed, 0.95 / Math.max(0.01, curvature));
       if (Math.abs(error) > 0.6) targetSpeed *= 0.6;
       if (state.surface === 'grass') targetSpeed = Math.min(targetSpeed, 10);
       if (hazard) targetSpeed *= 0.85;
@@ -82,6 +86,17 @@ export class AiDriver {
       this.cached = { throttle: state.speed < targetSpeed, brake: state.speed > targetSpeed + 0.6, steering: Math.max(-1, Math.min(1, error * 3.6)) };
     }
     this.driftTimer = Math.max(0, this.driftTimer - dt);
-    return { ...this.cached, drift: this.driftTimer > 0, useItem, rearward: racer.inventory.active === 'banana' };
+    const airborne = ['gliding', 'jumping', 'falling'].includes(state.traversal);
+    if (airborne) this.behavior = 'airborne';
+    let pitch = 0;
+    if (state.traversal === 'gliding') {
+      const road = sampleTrack(course, state);
+      const zone = course.launches.find((entry) => entry.glider)!;
+      const landing = poseAt(course, zone.landing);
+      const remaining = Math.max(course.compact ? 2 : 10, zone.landing - road.progress);
+      const desired = ((landing.y ?? 0) - state.y) / Math.max(0.5, remaining / Math.max(4, state.speed));
+      pitch = Math.max(-1, Math.min(1, (desired - state.vy) * 0.14));
+    }
+    return { ...this.cached, pitch, drift: !airborne && this.driftTimer > 0, useItem, rearward: racer.inventory.active === 'banana' };
   }
 }

@@ -1,0 +1,66 @@
+import type { Race } from '../gameplay/Race';
+import type { CourseDefinition } from '../data/types';
+import type { Settings } from '../data/options';
+import type { Viewport } from '../rendering/Renderer';
+import { itemDefinitions } from '../data/items';
+import { formatTime,keyLabel } from './format';
+
+export class RaceHud {
+  readonly root:HTMLElement;
+  private nodes=new Map<string,HTMLElement>();private race:Race|null=null;private toastTime=0;
+  private readonly suffix:string;
+  constructor(container:HTMLElement,readonly index:number){
+    this.suffix=index===0?'':'-p2';const id=(name:string)=>`${name}${this.suffix}`;
+    this.root=document.createElement('section');this.root.id=id('hud');this.root.className='hud release-hud';this.root.setAttribute('aria-label',`Player ${index+1} race information`);this.root.hidden=true;
+    this.root.innerHTML=`
+      <div class="session-card hud-card"><span class="eyebrow" id="${id('race-mode')}"></span><h2 id="${id('hud-course')}"></h2><div class="race-standing"><strong id="${id('position')}"></strong><span>COINS <b id="${id('coin-count')}">00</b> / 10</span></div></div>
+      <div class="lap-card hud-card"><div><span class="metric-label">LAP</span><strong id="${id('lap-count')}"></strong></div><div><span class="metric-label">RACE TIME</span><strong id="${id('race-time')}"></strong></div></div>
+      <div class="map-card hud-card"><svg id="${id('mini-map')}" role="img" aria-label="Player ${index+1} course mini map"><path id="${id('map-path')}" fill="none" stroke="#fff7e7" stroke-width="8"></path><g id="${id('map-branches')}"></g><g id="${id('map-opponents')}"></g><circle id="${id('map-marker')}" r="4" fill="#ec6a44" stroke="#fff7e7" stroke-width="2"></circle><path id="${id('map-finish')}" stroke="#234b40" stroke-width="3"></path></svg><span id="${id('gate-count')}"></span></div>
+      <div class="driving-help" id="${id('driving-help')}"></div>
+      <div class="item-panel hud-card" aria-label="Player ${index+1} two-slot inventory"><div class="item-slot" id="${id('active-slot')}"><small>ACTIVE</small><b>—</b><span>Empty</span></div><div class="item-slot reserve" id="${id('reserve-slot')}"><small>RESERVE</small><b>—</b><span>Empty</span></div></div>
+      <div id="${id('trial-stock')}" class="trial-stock"></div><div id="${id('countdown')}" class="countdown" role="status" aria-live="polite" hidden></div>
+      <div id="${id('wrong-way')}" class="wrong-way" role="status" hidden>↶ WRONG WAY · Turn around or rescue</div>
+      <div id="${id('attack-warning')}" class="attack-warning" role="status" hidden></div><div id="${id('kart-status')}" class="kart-status" role="status" hidden></div><div id="${id('drift-meter')}" class="drift-meter" hidden></div>
+      <div class="speed-card hud-card"><span id="${id('surface')}"></span><div><strong id="${id('speed')}">0</strong><span>KM/H</span></div><div class="speed-track"><i id="${id('speed-fill')}"></i></div><p>LAST LAP <strong id="${id('last-lap')}">—</strong></p></div>
+      <div id="${id('lap-toast')}" class="lap-toast" role="status" aria-live="polite" hidden></div><output id="${id('telemetry')}" hidden></output>`;
+    container.append(this.root);this.root.querySelectorAll<HTMLElement>('[id]').forEach((node)=>this.nodes.set(node.id.replace(this.suffix&&node.id.endsWith(this.suffix)?this.suffix:'___no_suffix___',''),node));
+  }
+  private node(name:string):HTMLElement{return this.nodes.get(name)!;}
+  layout(view:Viewport,scale:number,split:boolean):void{Object.assign(this.root.style,{left:`${view.x}px`,top:`${view.top}px`,width:`${view.width}px`,height:`${view.height}px`});this.root.style.setProperty('--hud-scale',String(scale));this.root.classList.toggle('compact-hud',split||view.width<1050);this.root.classList.toggle('short-hud',view.height<500);}
+  setCourse(course:CourseDefinition):void{
+    const points=[...course.samples,...course.branches.flatMap((branch)=>branch.samples)],minX=Math.min(...points.map((p)=>p.x))-12,maxX=Math.max(...points.map((p)=>p.x))+12,minZ=Math.min(...points.map((p)=>p.z))-12,maxZ=Math.max(...points.map((p)=>p.z))+12;
+    this.node('mini-map').setAttribute('viewBox',`${minX} ${minZ} ${maxX-minX} ${maxZ-minZ}`);
+    this.node('map-path').setAttribute('d',`M ${course.samples.map((p)=>`${p.x},${p.z}`).join(' L ')} Z`);
+    const branches=this.node('map-branches');branches.replaceChildren();for(const branch of course.branches){const path=document.createElementNS('http://www.w3.org/2000/svg','path');path.setAttribute('d',`M ${branch.samples.map((p)=>`${p.x},${p.z}`).join(' L ')}`);path.setAttribute('fill','none');path.setAttribute('stroke','#d9d8b4');path.setAttribute('stroke-width','5');branches.append(path);}
+    const finish=course.checkpoints[0]!,dx=Math.cos(finish.heading)*6,dz=-Math.sin(finish.heading)*6;this.node('map-finish').setAttribute('d',`M ${finish.x-dx},${finish.z-dz} L ${finish.x+dx},${finish.z+dz}`);this.node('hud-course').textContent=course.name;
+  }
+  showLap(lap:number,time:number):void{this.node('lap-toast').textContent=`LAP ${lap} · ${formatTime(time)}`;this.node('lap-toast').hidden=false;this.toastTime=3;}
+  clear():void{this.toastTime=0;this.node('lap-toast').hidden=true;}
+  update(race:Race,settings:Settings,dt:number):void{
+    const player=race.humans[this.index];if(!player){this.root.hidden=true;return;}const state=player.controller.state,progress=player.progress;
+    if(this.race!==race){
+      this.race=race;this.setCourse(race.course);this.clear();const map=this.node('map-opponents');map.replaceChildren();
+      for(const other of race.racers.filter((racer)=>racer.id!==player.id)){const marker=document.createElementNS('http://www.w3.org/2000/svg',other.player?'rect':'circle');marker.dataset.racer=other.id;if(other.player){marker.setAttribute('width','6');marker.setAttribute('height','6');}else marker.setAttribute('r','3');marker.setAttribute('fill',other.color);marker.setAttribute('stroke','#fff7e7');marker.setAttribute('stroke-width','1');const title=document.createElementNS('http://www.w3.org/2000/svg','title');title.textContent=other.name;marker.append(title);map.append(marker);}
+    }
+    this.node('race-mode').textContent=`P${this.index+1} · ${race.options.mode.replaceAll('-',' ').toUpperCase()} · ${race.racers.length} RACER${race.racers.length===1?'':'S'}`;
+    this.node('position').textContent=`${race.ranked.findIndex((racer)=>racer.id===player.id)+1} / ${race.racers.length}`;
+    this.node('coin-count').textContent=String(player.coins).padStart(2,'0');this.node('lap-count').textContent=`${Math.min(race.options.laps,progress.laps+1)} / ${race.options.laps}`;
+    this.node('race-time').textContent=formatTime(player.finishTime??race.time);this.node('last-lap').textContent=progress.lastLapTime?formatTime(progress.lastLapTime):'—';this.node('gate-count').textContent=`GATE ${String(progress.nextCheckpoint+1).padStart(2,'0')} / 12`;
+    this.node('speed').textContent=String(Math.round(Math.abs(state.speed)*3.6));this.node('speed-fill').style.width=`${Math.min(100,Math.abs(state.speed)/40*100)}%`;
+    this.node('surface').textContent=state.traversal==='grounded'?state.surface==='grass'?'OFF ROAD':'ON THE TARMAC':state.traversal.toUpperCase();
+    this.node('map-marker').setAttribute('cx',String(state.x));this.node('map-marker').setAttribute('cy',String(state.z));
+    for(const marker of this.node('map-opponents').children){const other=race.racers.find((racer)=>racer.id===(marker as SVGElement).dataset.racer)!;marker.setAttribute(other.player?'x':'cx',String(other.controller.state.x-(other.player?3:0)));marker.setAttribute(other.player?'y':'cy',String(other.controller.state.z-(other.player?3:0)));}
+    for(const[name,kind]of[['active-slot',player.inventory.active],['reserve-slot',player.inventory.reserve]] as const){const slot=this.node(name),definition=kind?itemDefinitions[kind]:null;slot.querySelector('b')!.textContent=definition?.icon??'—';slot.querySelector('span')!.textContent=definition?.name??'Empty';slot.title=definition?.description??'Drive through an item box';slot.dataset.item=kind??'empty';slot.classList.toggle('drawing',player.inventory.drawRemaining>0&&!!kind);}
+    const keys=settings.controls[this.index]!;this.node('active-slot').querySelector('small')!.textContent=`ACTIVE · ${keyLabel(keys.item)}`;
+    this.node('driving-help').textContent=`Esc pause · ${keyLabel(keys.rescue)} rescue · ${keyLabel(keys.item)} item · ${keyLabel(keys.drift)} drift`;
+    const countdown=this.node('countdown');countdown.hidden=!(race.state==='countdown'||(race.state==='racing'&&race.time<.8));countdown.textContent=race.state==='countdown'?String(Math.ceil(race.countdown)):'GO!';
+    this.node('wrong-way').hidden=player.wrongWayTime<.6;
+    const attack=this.node('attack-warning');attack.hidden=!player.warning;attack.textContent=player.warning==='leader'?'⇡ LEADER STRIKE INCOMING · Shield can counter':'◎ SEEKER INCOMING · Prepare your shield';
+    const status=this.node('kart-status');const message=player.finishTime!==null?'FINISH! Waiting for the field…':player.rescueRemaining>0?`RESCUE · ${player.rescueRemaining.toFixed(1)}s hold`:state.spin>0?'HIT · Brief damage immunity':state.shield>0?`SHIELD · ${state.shield.toFixed(1)}s`:state.invincible>0?`INVINCIBLE · ${state.invincible.toFixed(1)}s`:state.boost>0?'BOOST!':state.traversal==='gliding'?`GLIDING · Pitch ${Math.round(state.pitch*180/Math.PI)}°${state.trickReady>0?' · Trick now!':''}`:'';
+    status.textContent=message;status.hidden=!message;
+    const drift=this.node('drift-meter');drift.hidden=state.driftSide===0;drift.dataset.stage=String(state.driftStage);drift.textContent=state.driftStage?`${'◆'.repeat(state.driftStage)} ${['','BLUE','ORANGE','PURPLE'][state.driftStage]} · Release to boost`:'DRIFT · Charging';
+    const stock=this.node('trial-stock');stock.hidden=race.options.mode!=='time-trial';stock.textContent=`FIXED BOOSTS ${player.trialBoosts} / 3 · ${settings.ghost?'LOCAL GHOST ON':'GHOST OFF'}`;
+    Object.assign(this.node('telemetry').dataset,{x:String(state.x),y:String(state.y),z:String(state.z),heading:String(state.heading),speed:String(state.speed),checkpoint:String(progress.nextCheckpoint),laps:String(progress.laps),time:String(race.time),countdown:String(race.countdown),active:player.inventory.active??'',reserve:player.inventory.reserve??'',aiCount:String(race.brains.size),racers:String(race.racers.length),players:String(race.humans.length),finishers:String(race.racers.filter((r)=>r.finishTime!==null).length),rescues:String(player.rescues),coins:String(player.coins),itemsUsed:String(race.usesByRacer[player.id]??0),hits:String(race.stats.hits),boosts:String(race.stats.boosts),worldItems:String(race.items.objects.filter((object)=>object.active).length),drift:String(state.driftStage),immunity:String(state.immunity),wrongWay:String(player.wrongWayTime>=.6),traversal:state.traversal,upX:String(state.up.x),upY:String(state.up.y),upZ:String(state.up.z),pitch:String(state.pitch),vy:String(state.vy),mode:race.options.mode,trialBoosts:String(player.trialBoosts),rear:String(!!player.input.rearView),warning:player.warning,driver:player.controller.build.driver,quality:settings.quality});
+    if(this.toastTime>0){this.toastTime-=dt;if(this.toastTime<=0)this.node('lap-toast').hidden=true;}
+  }
+}

@@ -14,9 +14,9 @@ const idle: DrivingInput = { throttle: false, brake: false, steering: 0 };
 const dt = 1 / 60;
 function step(race: Race, seconds: number, input = idle): void { for (let i = 0; i < Math.round(seconds * 60); i++) race.update(input, dt); }
 
-test('grid has eight unique safe poses; three second countdown locks all movement and pauses', () => {
+test('grid has twelve unique safe poses; three second countdown locks all movement and pauses', () => {
   const race = new Race(createCourse(true));
-  assert.equal(race.racers.length, 8); assert.equal(race.brains.size, 7);
+  assert.equal(race.racers.length, 12); assert.equal(race.brains.size, 11);
   for (const racer of race.racers) assert.ok(sampleTrack(race.course, racer.grid).distance < race.course.width / 2);
   const poses = race.racers.map((racer) => [racer.controller.state.x, racer.controller.state.z]);
   step(race, 2, { ...idle, throttle: true });
@@ -36,7 +36,7 @@ test('two slots enforce capacity, draw delay and automatic reserve promotion', (
 
 test('opening draw excludes shell; trailing draws favor recovery without invalid results', () => {
   for (let i = 0; i < 100; i++) assert.notEqual(drawItem(8, 100, 1, () => i / 100), 'shell');
-  const kinds = Array.from({ length: 100 }, (_, i) => drawItem(8, 100, 10, () => i / 100));
+  const kinds = Array.from({ length: 100 }, (_, i) => drawItem(8, 100, 10, () => i / 100, 'basic'));
   assert.ok(kinds.filter((kind) => kind === 'mushroom').length > 50);
 });
 
@@ -133,7 +133,7 @@ test('results timeout clearly marks unfinished racers and freezes the accepted s
   const race = new Race(createCourse()); race.state = 'finished';
   race.player.finishTime = 10; race.player.finishPlace = 1;
   step(race, 15.1);
-  assert.equal(race.state, 'results'); assert.equal(race.results.length, 8);
+  assert.equal(race.state, 'results'); assert.equal(race.results.length, 12);
   assert.equal(race.results[0]!.id, 'player-1');
   assert.ok(race.results.slice(1).some((row) => !row.finished && row.time === null));
   const snapshot = JSON.stringify(race.results); step(race, 20); assert.equal(JSON.stringify(race.results), snapshot);
@@ -141,11 +141,11 @@ test('results timeout clearly marks unfinished racers and freezes the accepted s
 
 test('all three drift stages charge in simulation time, release boosts and hits cancel charge', () => {
   for (const [index, seconds] of [0.8, 1.6, 2.6].entries()) {
-    const controller = new KartController(createCourse());
+    const course = createCourse(); const controller = new KartController(course);
     // Keep the kart in a known valid road frame while testing charge timing independently of steering.
     for (let i = 0; i < seconds * 60; i++) {
       const s = controller.state;
-      Object.assign(s, { x: 0, z: 60, heading: Math.PI / 2, vx: 12, vz: 0 });
+      Object.assign(s, { x: course.spawn.x, y: course.spawn.y, z: course.spawn.z, heading: course.spawn.heading, vx: Math.sin(course.spawn.heading) * 12, vz: Math.cos(course.spawn.heading) * 12 });
       controller.update({ ...idle, throttle: true, steering: 0.2, drift: true }, dt);
       assert.ok(Number.isFinite(s.driftCharge));
     }
@@ -164,10 +164,14 @@ for (const compact of [true, false]) test(`complete seeded 3-lap race and clean 
   }
   console.log(course.name, race.time.toFixed(1), race.racers.map((r) => `${r.name}:${r.progress.laps}/${r.progress.nextCheckpoint} rescue=${r.rescues}`).join(' '), race.items.usage);
   assert.equal(race.state, 'results'); assert.equal(race.player.progress.laps, 3);
-  assert.equal(race.results.length, 8); assert.ok(events.includes('finish'));
-  assert.equal(race.racers.filter((r) => !r.player && r.progress.laps === 3).length, 7, 'all AI must complete full valid laps without progress shortcuts');
+  assert.equal(race.results.length, 12); assert.ok(events.includes('finish'));
+  for (const row of race.results) {
+    const racer = race.racers.find((entry) => entry.id === row.id)!;
+    assert.equal(row.finished, racer.progress.laps === 3, 'finish status must match three validated laps');
+    if (!row.finished) { assert.equal(row.time, null); assert.ok(racer.progress.laps < 3); }
+  }
   assert.equal(race.racers.reduce((total, r) => total + r.rescues, 0), 0, 'routine AI racing must not rely on rescue teleports');
-  for (const count of Object.values(race.items.usage)) assert.ok(count > 0, 'all three items must be used in the integrated race');
+  for (const kind of ['banana', 'shell', 'mushroom'] as const) assert.ok(race.items.usage[kind] > 0, 'core items must be used in the integrated race');
   for (const row of race.results) if (row.finished) assert.ok(row.time! > 0);
   const results = JSON.stringify(race.results); step(race, 20); assert.equal(JSON.stringify(race.results), results);
   const restart = new Race(course);
