@@ -1,4 +1,5 @@
 import { config } from '../data/config';
+import { arenaContact } from '../tracks/arena';
 import { calculateStats, gliders } from '../data/content';
 import type { VehicleStats } from '../data/content';
 import { defaultSettings, speedProfiles } from '../data/options';
@@ -105,7 +106,8 @@ export class KartController {
     s.x+=s.vx*dt;s.z+=s.vz*dt;
     const contact=sampleTrack(this.course,s);
     const boundary=contact.width/2+2.4-k.radius;
-    if(!this.course.exposed && contact.distance>boundary){
+    if(this.course.arena){const collision=arenaContact(this.course.arena,s,k.radius);if(collision.hit){s.x=collision.x;s.z=collision.z;const outward=Math.max(0,s.vx*collision.nx+s.vz*collision.nz);s.vx=(s.vx-collision.nx*outward)*.8;s.vz=(s.vz-collision.nz*outward)*.8;if(outward>6)this.cancelDrift();}}
+    else if(!this.course.exposed && contact.distance>boundary){
       const sign=Math.sign(contact.offset)||1, nx=contact.normal.x*sign,nz=contact.normal.z*sign;
       const horizontal=boundary*Math.cos(contact.bank);
       s.x=contact.x+nx*horizontal;s.z=contact.z+nz*horizontal;

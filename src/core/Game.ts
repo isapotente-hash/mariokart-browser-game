@@ -5,6 +5,8 @@ import { itemKinds } from '../data/items';
 import { FixedStep } from './FixedStep';
 import { KartController } from '../gameplay/KartController';
 import { Race } from '../gameplay/Race';
+import { Battle } from '../gameplay/Battle';
+import { createArena } from '../tracks/arena';
 import { Session } from '../gameplay/Session';
 import { Keyboard } from '../platform/Keyboard';
 import { Sound } from '../platform/Sound';
@@ -18,8 +20,9 @@ export class Game {
   private readonly saves=new SaveStore();private readonly ghosts=new GhostStore();private readonly session=new Session(this.saves);
   private readonly compact=new URLSearchParams(location.search).get('course')==='short';
   private state:RaceState='boot';
-  private course:CourseDefinition=createCourse(this.saves.data.settings.course,this.saves.data.settings.mirrored,this.compact);
-  private race=new Race(this.course,4782,raceOptions(this.saves.data.settings));
+  private playfield(options:RaceOptions):CourseDefinition{return options.mode==='balloon-battle'?createArena():createCourse(options.course,options.mirrored,this.compact);}
+  private course:CourseDefinition=this.playfield(raceOptions(this.saves.data.settings));
+  private race:Race=this.saves.data.settings.mode==='balloon-battle'?new Battle(this.course,4782,raceOptions(this.saves.data.settings)):new Race(this.course,4782,raceOptions(this.saves.data.settings));
   private menuKart=new KartController(this.course,this.course.spawn,this.saves.data.settings.builds[0],this.saves.data.settings.speed).state;
   private readonly input=new Keyboard();private readonly sound=new Sound();private readonly clock=new FixedStep();
   private readonly ui:Interface;private readonly rendering:Renderer;
@@ -60,7 +63,7 @@ export class Game {
   private changeSettings(source:Settings):void{
     const previous=this.saves.data.settings,settings=validateSettings(source);this.saves.data.settings=settings;this.saves.save();this.input.configure(settings);this.sound.apply(settings);this.rendering.applySettings(settings);
     if(this.state==='menu'){
-      if(previous.course!==settings.course||previous.mirrored!==settings.mirrored){this.course=createCourse(settings.course,settings.mirrored,this.compact);this.rendering.setCourse(this.course);this.ui.setCourse(this.course);this.snapCamera=true;}
+      if(previous.course!==settings.course||previous.mirrored!==settings.mirrored||previous.mode!==settings.mode){this.course=this.playfield(raceOptions(settings));this.rendering.setCourse(this.course);this.ui.setCourse(this.course);this.snapCamera=true;}
       this.menuKart=new KartController(this.course,this.course.spawn,settings.builds[0],settings.speed).state;this.rendering.previewBuild(settings.builds[0]);
     }
     this.refreshMenus();
@@ -72,9 +75,9 @@ export class Game {
     const token=++this.loadToken;this.sound.unlock();this.setState('loading');this.ui.setLoading(.1,'Constructing the selected course…');
     try{
       await new Promise<void>((resolve)=>requestAnimationFrame(()=>resolve()));if(token!==this.loadToken)return;
-      this.course=createCourse(options.course,options.mirrored,this.compact);this.rendering.setCourse(this.course);this.ui.setCourse(this.course);this.ui.setLoading(.5,'Assembling racers and vehicle parts…');
+      this.course=this.playfield(options);this.rendering.setCourse(this.course);this.ui.setCourse(this.course);this.ui.setLoading(.5,'Assembling racers and vehicle parts…');
       await new Promise<void>((resolve)=>requestAnimationFrame(()=>resolve()));if(token!==this.loadToken)return;
-      this.race=new Race(this.course,4782+(options.mode==='grand-prix'?(this.saves.data.cup?.nextRace??0)*901:0),options);
+      this.race=options.mode==='balloon-battle'?new Battle(this.course,4782,options):new Race(this.course,4782+(options.mode==='grand-prix'?(this.saves.data.cup?.nextRace??0)*901:0),options);
       this.recorder=options.mode==='time-trial'?new GhostRecorder():null;this.recorder?.sample(0,this.race.player.controller.state);this.completed=null;
       this.ui.setLoading(.8,'Reading local ghost data…');const ghost=options.mode==='time-trial'&&this.saves.data.settings.ghost?await this.ghosts.get(ghostKey(options,this.course.version),this.course.version):null;if(token!==this.loadToken)return;
       this.rendering.setGhost(ghost);this.rendering.applySettings(this.saves.data.settings);this.input.configure({...this.saves.data.settings,players:options.players});
@@ -84,7 +87,7 @@ export class Game {
   }
   private menu():void{
     this.loadToken++;this.recorder=null;this.rendering.setGhost(null);this.sound.reset();
-    const settings=this.saves.data.settings;this.course=createCourse(settings.course,settings.mirrored,this.compact);this.rendering.setCourse(this.course);this.rendering.previewBuild(settings.builds[0]);this.menuKart=new KartController(this.course,this.course.spawn,settings.builds[0],settings.speed).state;
+    const settings=this.saves.data.settings;this.course=this.playfield(raceOptions(settings));this.rendering.setCourse(this.course);this.ui.setCourse(this.course);this.rendering.previewBuild(settings.builds[0]);this.menuKart=new KartController(this.course,this.course.spawn,settings.builds[0],settings.speed).state;
     this.snapCamera=true;this.setState('menu');this.refreshMenus();
   }
   private pause():void{if(['countdown','racing','finished'].includes(this.state)){this.race.pause();this.setState('paused');}}

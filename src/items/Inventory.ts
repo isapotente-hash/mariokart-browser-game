@@ -15,4 +15,5 @@ export class Inventory {
     return this.slots.shift() ?? null;
   }
   update(dt: number): void { this.drawRemaining = Math.max(0, this.drawRemaining - dt); }
+  clear(): void { this.slots = []; this.drawRemaining = 0; }
 }

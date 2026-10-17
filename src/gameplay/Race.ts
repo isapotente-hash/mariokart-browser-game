@@ -12,9 +12,11 @@ import { KartController } from './KartController';
 import { LapProgress } from './LapProgress';
 import type { Racer, ResultRow } from './Racer';
 import { rankRacers, validatedDistance } from './ranking';
+import type { BattleStatus } from './Battle';
 
 const idle:DrivingInput={throttle:false,brake:false,steering:0};
 export class Race {
+  battle:BattleStatus|null=null;
   state:RaceState='countdown';countdown:number=config.race.countdown;time=0;
   readonly racers:Racer[];readonly items:ItemWorld;readonly brains=new Map<string,AiDriver>();
   readonly options:RaceOptions;
@@ -62,7 +64,7 @@ export class Race {
     Object.assign(racer.previous,racer.controller.state);racer.distance=validatedDistance(this.course,racer);
     return[{type:'rescue',racerId:racer.id}];
   }
-  private collisions():GameEvent[]{
+  protected collisions():GameEvent[]{
     const events:GameEvent[]=[];
     for(let i=0;i<this.racers.length;i++)for(let j=i+1;j<this.racers.length;j++){
       const a=this.racers[i]!,b=this.racers[j]!,sa=a.controller.state,sb=b.controller.state;

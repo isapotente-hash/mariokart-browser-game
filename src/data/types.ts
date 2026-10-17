@@ -8,6 +8,12 @@ export interface CourseSample extends Point {
   y: number; bank: number; slope: number; traversal: 'grounded' | 'underwater' | 'anti-gravity'; gap: boolean;
 }
 export interface Checkpoint extends Pose { halfWidth: number }
+export interface ArenaDefinition {
+  halfSize: number;
+  obstacles: { x:number; z:number; halfWidth:number; halfDepth:number; height:number }[];
+  spawns: Pose[];
+  supplies: (Point & { double:boolean })[];
+}
 export interface CourseDefinition {
   id: string;
   name: string;
@@ -22,6 +28,7 @@ export interface CourseDefinition {
   hazards: { id: string; progress: number; amplitude: number; period: number; radius: number }[];
   launches: { from: number; to: number; landing: number; glider: boolean }[];
   exposed: boolean;
+  arena?: ArenaDefinition;
 }
 export interface DrivingInput { throttle: boolean; brake: boolean; steering: number; drift?: boolean; useItem?: boolean; rearward?: boolean; rescue?: boolean; pitch?: number; rearView?: boolean }
 export interface KartState extends Pose {

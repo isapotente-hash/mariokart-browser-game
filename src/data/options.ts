@@ -1,6 +1,6 @@
 export const courseIds = ['garden-circuit', 'harbour-run', 'sky-foundry', 'starlight-causeway'] as const;
 export type CourseId = typeof courseIds[number];
-export type GameMode = 'versus' | 'grand-prix' | 'time-trial';
+export type GameMode = 'versus' | 'grand-prix' | 'time-trial' | 'balloon-battle';
 export type Quality = 'low' | 'medium' | 'high';
 export type Difficulty = 'easy' | 'normal' | 'hard';
 export type SpeedClass = '50cc' | '100cc' | '150cc' | '200cc';
@@ -10,6 +10,7 @@ export interface RaceOptions {
   mode: GameMode; course: CourseId; players: 1 | 2; difficulty: Difficulty;
   speed: SpeedClass; laps: number; items: ItemSetting; mirrored: boolean; builds: [VehicleBuild, VehicleBuild];
   autoAccelerate: boolean; steeringAssist: boolean;
+  battleDuration?: number;
 }
 export interface ControlBindings { throttle: string; brake: string; left: string; right: string; drift: string; item: string; rear: string; rescue: string; pitchUp: string; pitchDown: string }
 export interface Settings extends RaceOptions {
@@ -24,7 +25,7 @@ export const defaultBindings = (): [ControlBindings, ControlBindings] => [
 ];
 export function defaultSettings(): Settings {
   return {
-    mode: 'versus', course: 'garden-circuit', players: 1, difficulty: 'normal', speed: '150cc', laps: 3, items: 'all', mirrored: false,
+    mode: 'versus', course: 'garden-circuit', players: 1, difficulty: 'normal', speed: '150cc', laps: 3, items: 'all', mirrored: false, battleDuration:120,
     builds: [{ driver: 'nova', chassis: 'swift', tyres: 'standard', glider: 'cloth' }, { driver: 'moss', chassis: 'rover', tyres: 'grip', glider: 'wing' }],
     autoAccelerate: false, steeringAssist: false, quality: 'medium', split: 'auto', ghost: true, reducedMotion: false, hudScale: 1,
     masterVolume: 0.65, musicVolume: 0.22, effectsVolume: 0.65, muted: false, touchControls: 'auto', controls: defaultBindings(), devices: ['keyboard', 'keyboard'],
@@ -40,5 +41,5 @@ export const qualityProfiles = {
   high: { pixelRatio: 2, shadowSize: 2048, particles: 2, drawDistance: 480, decoration: 1 },
 } as const;
 export function raceOptions(settings:RaceOptions):RaceOptions {
-  return {mode:settings.mode,course:settings.course,players:settings.mode==='time-trial'?1:settings.players,difficulty:settings.difficulty,speed:settings.speed,laps:settings.mode==='versus'?settings.laps:3,items:settings.mode==='time-trial'?'none':settings.items,mirrored:settings.mirrored,builds:structuredClone(settings.builds),autoAccelerate:settings.autoAccelerate,steeringAssist:settings.steeringAssist};
+  return {mode:settings.mode,course:settings.course,players:settings.mode==='time-trial'?1:settings.players,difficulty:settings.difficulty,speed:settings.speed,laps:settings.mode==='versus'?settings.laps:3,items:settings.mode==='time-trial'?'none':settings.mode==='balloon-battle'?'all':settings.items,mirrored:settings.mode==='balloon-battle'?false:settings.mirrored,builds:structuredClone(settings.builds),autoAccelerate:settings.autoAccelerate,steeringAssist:settings.steeringAssist,battleDuration:settings.battleDuration??120};
 }

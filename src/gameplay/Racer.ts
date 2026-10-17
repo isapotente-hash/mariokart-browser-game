@@ -11,4 +11,4 @@ export interface Racer {
   wrongWayTime: number; finishTime: number | null; finishPlace: number | null; distance: number;
   warning: '' | 'homing' | 'leader'; trialBoosts: number;
 }
-export interface ResultRow { id: string; name: string; place: number; time: number | null; coins: number; finished: boolean }
+export interface ResultRow { id: string; name: string; place: number; time: number | null; coins: number; finished: boolean; score?:number; hits?:number; losses?:number; respawns?:number }

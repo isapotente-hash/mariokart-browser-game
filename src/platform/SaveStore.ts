@@ -25,7 +25,8 @@ export function validateSettings(value: unknown): Settings {
   const controls = Array.isArray(source.controls) ? source.controls : [];
   const devices = Array.isArray(source.devices) ? source.devices : [];
   const result: Settings = {
-    mode: member(source.mode, ['versus', 'grand-prix', 'time-trial'], defaults.mode),
+    mode: member(source.mode, ['versus', 'grand-prix', 'time-trial', 'balloon-battle'], defaults.mode),
+    battleDuration: [30,60,120,180].includes(Number(source.battleDuration)) ? Number(source.battleDuration) : 120,
     course: member(source.course, courseIds, defaults.course), players: source.players === 2 ? 2 : 1,
     difficulty: member(source.difficulty, ['easy', 'normal', 'hard'], defaults.difficulty), speed: member(source.speed, ['50cc', '100cc', '150cc', '200cc'], defaults.speed),
     laps: Math.round(number(source.laps, 3, 1, 5)), items: member(source.items, ['all', 'basic', 'none'], defaults.items), mirrored: bool(source.mirrored, false),
@@ -40,6 +41,7 @@ export function validateSettings(value: unknown): Settings {
   if (Object.values(result.controls[0]).some((code) => Object.values(result.controls[1]).includes(code))) result.controls = structuredClone(defaults.controls);
   if (result.mode === 'time-trial') { result.players = 1; result.laps = 3; result.items = 'none'; }
   if (result.mode === 'grand-prix') { result.laps = 3; result.items = 'all'; }
+  if (result.mode === 'balloon-battle') { result.items = 'all'; result.mirrored = false; }
   return result;
 }
 function validateCup(value: unknown): CupProgress | null {

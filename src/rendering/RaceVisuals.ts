@@ -14,6 +14,7 @@ export class RaceVisuals {
   private models:KartModel[]=[];private modelKeys:string[]=[];private angles:number[]=[];
   private pickups:THREE.Object3D[]=[];private objects:THREE.Group[]=[];private effects:THREE.Group[]=[];private bubbles:THREE.Group[]=[];private hazards:THREE.Mesh[]=[];
   private ghost:KartModel|null=null;private ghostKey='';
+  private balloons:THREE.Group[]=[];
   private readonly kinds=['banana','shell','homing','explosive','leader','burst'];
   constructor(){
     const mat=(color:string)=>new THREE.MeshStandardMaterial({color,roughness:.6});
@@ -27,9 +28,12 @@ export class RaceVisuals {
     for(let i=0;i<config.items.poolSize;i++){const group=new THREE.Group();group.add(...prototypes.map((object)=>object.clone()));group.visible=false;this.objects.push(group);this.root.add(group);}
     const box=new THREE.Mesh(new THREE.OctahedronGeometry(.85),new THREE.MeshStandardMaterial({color:'#a7dce8',emissive:'#397b88',emissiveIntensity:.35,metalness:.15,roughness:.3}));
     const coin=new THREE.Mesh(new THREE.CylinderGeometry(.45,.45,.15,12),new THREE.MeshStandardMaterial({color:'#ffcf43',metalness:.4,roughness:.45}));coin.rotation.x=Math.PI/2;
-    for(let i=0;i<45;i++){const pickup=(i<15?box:coin).clone();this.pickups.push(pickup);this.root.add(pickup);}
+    for(let i=0;i<45;i++){const pickup=new THREE.Group();pickup.add(box.clone(),coin.clone());this.pickups.push(pickup);this.root.add(pickup);}
+    const balloonGeometry=new THREE.SphereGeometry(.48,10,8),stringGeometry=new THREE.CylinderGeometry(.012,.012,1.4,4),stringMaterial=mat('#e6efeb');
+    const balloonMaterials=['#ff9a70','#78d4dd','#f6d56e'].map(mat);
     const bubbleGeometry=new THREE.SphereGeometry(.12,6,4),bubbleMaterial=new THREE.MeshBasicMaterial({color:'#caeff2',transparent:true,opacity:.45,depthWrite:false});
     for(let i=0;i<12;i++){
+      const balloons=new THREE.Group();balloons.name=`battle-balloons-${i}`;for(let j=0;j<3;j++){const balloon=new THREE.Group(),sphere=new THREE.Mesh(balloonGeometry,balloonMaterials[j]!);sphere.scale.y=1.2;sphere.position.y=.7;const string=new THREE.Mesh(stringGeometry,stringMaterial);string.position.y=-.55;balloon.add(sphere,string);balloon.position.set((j-1)*.85,j===1?.35:0,0);balloons.add(balloon);}this.balloons.push(balloons);this.root.add(balloons);
       const group=new THREE.Group(),trail=new THREE.Mesh(new THREE.ConeGeometry(.3,2.5,5),new THREE.MeshBasicMaterial({color:'#ffc24b'}));trail.rotation.x=-Math.PI/2;trail.position.set(0,.4,-2.3);
       const spark=new THREE.Mesh(new THREE.OctahedronGeometry(.23),new THREE.MeshBasicMaterial({color:'#65c9ff'}));spark.position.set(-1,.3,-1);const other=spark.clone();other.position.x=1;
       const halo=new THREE.Mesh(new THREE.TorusGeometry(1.35,.06,4,20),new THREE.MeshBasicMaterial({color:'#e5fbf4',transparent:true,opacity:.65}));halo.rotation.x=Math.PI/2;halo.position.y=.15;
@@ -48,10 +52,11 @@ export class RaceVisuals {
     this.root.visible=visible;if(!visible)return;const particles=qualityProfiles[quality].particles;
     for(let i=0;i<12;i++){
       const racer=race.racers[i];
-      if(!racer){if(this.models[i])this.models[i]!.root.visible=false;this.effects[i]!.visible=false;this.bubbles[i]!.visible=false;continue;}
+      if(!racer){if(this.models[i])this.models[i]!.root.visible=false;this.effects[i]!.visible=false;this.bubbles[i]!.visible=false;this.balloons[i]!.visible=false;continue;}
       const state=racer.controller.state,previous=racer.previous,model=this.model(i,racer.controller.build);
       const x=THREE.MathUtils.lerp(previous.x,state.x,alpha),y=THREE.MathUtils.lerp(previous.y,state.y,alpha),z=THREE.MathUtils.lerp(previous.z,state.z,alpha);
       const heading=THREE.MathUtils.lerp(previous.heading,state.heading,alpha),up={x:THREE.MathUtils.lerp(previous.up.x,state.up.x,alpha),y:THREE.MathUtils.lerp(previous.up.y,state.up.y,alpha),z:THREE.MathUtils.lerp(previous.up.z,state.up.z,alpha)};
+      const balloons=this.balloons[i]!;balloons.visible=!!race.battle;balloons.position.set(x,y+3.1+Math.sin(race.time*2+i)*.08,z);balloons.rotation.y=heading;for(let j=0;j<3;j++)balloons.children[j]!.visible=j<(race.battle?.stats[racer.id]?.balloons??0);
       model.root.visible=true;model.root.position.set(x,y+.09+state.hop+(racer.rescueRemaining>0?1.5:0),z);
       orient(model.root,heading+(state.spin>0?(1-state.spin/config.race.hitSpin)*Math.PI*4:0),up,state.traversal==='gliding'?state.pitch:0);
       model.body.rotation.z=racer.finishTime!==null?Math.sin(race.time*6)*.04:-racer.input.steering*Math.min(.07,Math.abs(state.speed)*.003);
@@ -68,7 +73,7 @@ export class RaceVisuals {
       const bubbles=this.bubbles[i]!;bubbles.visible=state.traversal==='underwater'&&particles>0;bubbles.position.set(x,y,z);
       for(let j=0;j<bubbles.children.length;j++){const bubble=bubbles.children[j]!;bubble.visible=j<(particles===2?16:7);bubble.position.set(Math.sin(j*4.7+race.time)*1.2,(j*.3+race.time*1.5)%4,Math.cos(j*3.1+race.time)*1.2);}
     }
-    for(let i=0;i<this.pickups.length;i++){const model=this.pickups[i]!,pickup=race.items.pickups[i]!;model.visible=pickup.enabled&&pickup.cooldown<=0;model.position.set(pickup.x,pickup.y+(pickup.kind==='box'?1.25:.95),pickup.z);model.rotation.y=race.time*1.3;model.scale.setScalar(pickup.double?1.12:1);}
+    for(let i=0;i<this.pickups.length;i++){const model=this.pickups[i]!,pickup=race.items.pickups[i];model.visible=!!pickup&&pickup.enabled&&pickup.cooldown<=0;if(!pickup)continue;model.children[0]!.visible=pickup.kind==='box';model.children[1]!.visible=pickup.kind==='coin';model.position.set(pickup.x,pickup.y+(pickup.kind==='box'?1.25:.95),pickup.z);model.rotation.y=race.time*1.3;model.scale.setScalar(pickup.double?1.12:1);}
     for(let i=0;i<this.objects.length;i++){
       const model=this.objects[i]!,item=race.items.objects[i]!;model.visible=item.active;if(!item.active)continue;model.position.set(item.x,item.y+.12,item.z);
       const kind=this.kinds.indexOf(item.kind);for(let j=0;j<model.children.length;j++)model.children[j]!.visible=j===kind;

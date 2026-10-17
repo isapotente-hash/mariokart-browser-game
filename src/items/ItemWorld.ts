@@ -4,6 +4,7 @@ import type { ItemSetting } from '../data/options';
 import type { CourseDefinition, GameEvent, ItemKind, Point } from '../data/types';
 import type { Racer } from '../gameplay/Racer';
 import { poseAt, sampleTrack } from '../tracks/course';
+import { arenaContact,arenaWaypoint,arenaLineClear } from '../tracks/arena';
 
 export interface Pickup extends Point { id:string;kind:'box'|'coin';y:number;cooldown:number;double:boolean;enabled:boolean }
 export type WorldKind = 'banana'|'shell'|'homing'|'explosive'|'leader'|'burst';
@@ -22,6 +23,7 @@ export class ItemWorld {
   readonly usage:Record<ItemKind,number>=Object.fromEntries(itemKinds.map((kind)=>[kind,0])) as Record<ItemKind,number>;
   hits=0;
   constructor(readonly course:CourseDefinition,private readonly random:()=>number,readonly setting:ItemSetting='all',readonly trial=false){
+    if(course.arena){course.arena.supplies.forEach((p,index)=>this.pickups.push({...p,id:`arena-box-${index}`,kind:'box',y:0,cooldown:0,enabled:true}));return;}
     for(let group=0;group<5;group++)for(let lane=-1;lane<=1;lane++){
       const p=poseAt(course,course.length*(.1+group*.175)),road=sampleTrack(course,p),offset=lane*course.width*.25;
       this.pickups.push({id:`box-${group}-${lane}`,kind:'box',x:p.x+road.right.x*offset,y:road.height+road.right.y*offset,z:p.z+road.right.z*offset,cooldown:0,double:lane===0,enabled:!trial&&setting!=='none'&&!road.gap});
@@ -36,8 +38,9 @@ export class ItemWorld {
     Object.assign(object,{active:true,kind,owner:owner.id,x:owner.controller.state.x,y:owner.controller.state.y,z:owner.controller.state.z,vx:0,vz:0,age:0,life:8,bounces:0,target:'',direction:1,exploded:false,radius:0});object.hitIds.clear();return object;
   }
   private target(owner:Racer,racers:readonly Racer[],leader=false,rearward=false):Racer|undefined {
-    const eligible=racers.filter((r)=>r.id!==owner.id&&r.finishTime===null);
+    const eligible=racers.filter((r)=>r.id!==owner.id&&r.finishTime===null&&r.rescueRemaining===0);
     if(leader)return eligible.sort((a,b)=>b.distance-a.distance)[0];
+    if(this.course.arena)return eligible.sort((a,b)=>Math.hypot(a.controller.state.x-owner.controller.state.x,a.controller.state.z-owner.controller.state.z)-Math.hypot(b.controller.state.x-owner.controller.state.x,b.controller.state.z-owner.controller.state.z))[0];
     const ahead=eligible.filter((r)=>rearward?r.distance<owner.distance:r.distance>owner.distance);
     return (ahead.length?ahead:eligible).sort((a,b)=>Math.abs(a.distance-owner.distance)-Math.abs(b.distance-owner.distance))[0];
   }
@@ -60,6 +63,7 @@ export class ItemWorld {
     const fx=Math.sin(state.heading)*direction,fz=Math.cos(state.heading)*direction;
     const speed=item==='shell'?config.items.shellSpeed:item==='explosive'?16:this.course.compact?14:48;
     Object.assign(object,{x:state.x+fx*2.2,z:state.z+fz*2.2,y:state.y+.4,vx:item==='banana'?0:fx*speed,vz:item==='banana'?0:fz*speed,life:item==='banana'?config.items.trapLife:item==='leader'?30:item==='homing'?20:item==='explosive'?2.2:config.items.shellLife,target:target?.id??'',direction});
+    if(this.course.arena){const point=arenaContact(this.course.arena,object,.5);object.x=point.x;object.z=point.z;}
     return events;
   }
   private hit(racer:Racer,object:WorldItem,consume=true):GameEvent[]{
@@ -70,16 +74,16 @@ export class ItemWorld {
     return[{type:'hit',racerId:racer.id,ownerId:object.owner}];
   }
   private guide(object:WorldItem,racers:readonly Racer[],dt:number):Racer|undefined {
-    let target=racers.find((r)=>r.id===object.target&&r.finishTime===null);
+    let target=racers.find((r)=>r.id===object.target&&r.finishTime===null&&r.rescueRemaining===0);
     if(!target){const owner=racers.find((r)=>r.id===object.owner);target=owner?this.target(owner,racers,object.kind==='leader',object.direction<0):undefined;object.target=target?.id??'';}
     if(!target){object.active=false;return;}
     const road=sampleTrack(this.course,object),targetRoad=sampleTrack(this.course,target.controller.state);
     const remaining=((targetRoad.progress-road.progress)*object.direction+this.course.length)%this.course.length;
-    const aim=remaining<10?target.controller.state:poseAt(this.course,road.progress+object.direction*Math.min(10,remaining),road.route);
+    const aim=this.course.arena?arenaWaypoint(this.course.arena,object,target.controller.state):remaining<10?target.controller.state:poseAt(this.course,road.progress+object.direction*Math.min(10,remaining),road.route);
     const current=Math.atan2(object.vx,object.vz),desired=Math.atan2(aim.x-object.x,aim.z-object.z);
     const delta=Math.atan2(Math.sin(desired-current),Math.cos(desired-current));
     const angle=current+Math.max(-3.2*dt,Math.min(3.2*dt,delta));
-    const speed=object.kind==='leader'?(this.course.compact?18:60):(this.course.compact?14:48);
+    const speed=this.course.arena?(object.kind==='leader'?26:22):object.kind==='leader'?(this.course.compact?18:60):(this.course.compact?14:48);
     object.vx=Math.sin(angle)*speed;object.vz=Math.cos(angle)*speed;
     if(object.kind==='leader')target.warning='leader';else if(target.warning!=='leader'&&Math.hypot(target.controller.state.x-object.x,target.controller.state.z-object.z)<65)target.warning='homing';
     return target;
@@ -112,8 +116,8 @@ export class ItemWorld {
       object.age+=dt;object.life-=dt;if(object.life<=0){object.active=false;continue;}
       if(object.kind==='burst'){object.radius=Math.min(7,object.age*20);continue;}
       if(object.kind==='explosive'){
-        if(object.age<1.6){object.x+=object.vx*dt;object.z+=object.vz*dt;object.vx*=Math.exp(-1.6*dt);object.vz*=Math.exp(-1.6*dt);object.y=sampleTrack(this.course,object).height+.4+Math.sin(object.age/1.6*Math.PI)*2;}
-        else{object.exploded=true;object.radius=6;object.y=sampleTrack(this.course,object).height;for(const racer of racers)if(Math.hypot(racer.controller.state.x-object.x,racer.controller.state.y-object.y,racer.controller.state.z-object.z)<6)events.push(...this.hit(racer,object,false));}
+        if(object.age<1.6){object.x+=object.vx*dt;object.z+=object.vz*dt;object.vx*=Math.exp(-1.6*dt);object.vz*=Math.exp(-1.6*dt);object.y=sampleTrack(this.course,object).height+.4+Math.sin(object.age/1.6*Math.PI)*2;if(this.course.arena){const contact=arenaContact(this.course.arena,object,.5);if(contact.hit){object.x=contact.x;object.z=contact.z;object.vx=0;object.vz=0;}}}
+        else{object.exploded=true;object.radius=6;object.y=sampleTrack(this.course,object).height;for(const racer of racers)if(Math.hypot(racer.controller.state.x-object.x,racer.controller.state.y-object.y,racer.controller.state.z-object.z)<6&&(!this.course.arena||arenaLineClear(this.course.arena,object,racer.controller.state,0)))events.push(...this.hit(racer,object,false));}
         continue;
       }
       if(object.kind==='banana'){
@@ -132,7 +136,8 @@ export class ItemWorld {
         const from={x:object.x,z:object.z};object.x+=object.vx*dt/steps;object.z+=object.vz*dt/steps;
         const road=sampleTrack(this.course,object);object.y=road.height+(object.kind==='leader'?3:.4);
         const boundary=road.width/2+2.4-.45;
-        if(object.kind!=='leader'&&road.distance>boundary){
+        if(this.course.arena&&object.kind!=='leader'){const collision=arenaContact(this.course.arena,object,.45);if(collision.hit){object.x=collision.x;object.z=collision.z;const outward=object.vx*collision.nx+object.vz*collision.nz;if(outward>0){object.vx-=2*outward*collision.nx;object.vz-=2*outward*collision.nz;object.bounces++;}if(object.bounces>=config.items.shellBounces)object.active=false;}}
+        else if(object.kind!=='leader'&&road.distance>boundary){
           const sign=Math.sign(road.offset)||1,nx=road.normal.x*sign,nz=road.normal.z*sign;
           object.x=road.x+nx*boundary*Math.cos(road.bank);object.z=road.z+nz*boundary*Math.cos(road.bank);
           const outward=object.vx*nx+object.vz*nz;

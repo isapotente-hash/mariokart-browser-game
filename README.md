@@ -1,6 +1,6 @@
-# Pocket Circuit · Milestone Three
+# Pocket Circuit · Milestone Four
 
-An original browser kart racer built with TypeScript, Three.js and Vite. The release implements page 9 of [Specification.md](Specification.md): four courses, twelve racers, eight original drivers, vehicle customization, eight items, special traversal, three modes, local split screen, saves, procedural audio and quality presets. No Nintendo assets or external media are used.
+An original browser kart racer built with TypeScript, Three.js and Vite. The release implements page 9 of [Specification.md](Specification.md): four courses, twelve racers, eight original drivers, vehicle customization, eight items, special traversal, three racing modes plus Balloon Battle, local split screen, saves, procedural audio and quality presets. No Nintendo assets or external media are used.
 
 ## Run
 
@@ -21,12 +21,13 @@ npx playwright install chromium
 npm run test:browser
 ```
 
-Browser checks use the production build, real DOM controls and keyboard driving. `?course=short` uses compact versions of the four release courses for practical completion checks; traversal remains active. Normal play uses the full courses. See [release verification](docs/verification-m3.md) and [Milestone Two verification](docs/verification-m2.md).
+Browser checks use the production build, real DOM controls and keyboard driving. `?course=short` uses compact versions of the four release courses for practical completion checks; traversal remains active. Normal play uses the full courses. See [Battle Mode verification](docs/verification-m4.md), [release verification](docs/verification-m3.md) and [Milestone Two verification](docs/verification-m2.md).
 
 ## Play
 
 | Mode | Rules |
 | --- | --- |
+| Balloon Battle | Switchyard Plaza, twelve racers, three visible balloons each. Score opponent hits during a 30/60/120/180-second match (default two minutes), with safe respawns and one declared winner. |
 | Versus | Choose course, difficulty, 50/100/150/200cc, one to five laps, all/basic/no items, mirror and one or two players. |
 | Grand Prix | Four courses in order, three laps each. Points: 15, 12, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1. Ties use wins, then final-race position. Resume an unfinished local cup or abandon it with confirmation. |
 | Time Trial | One player, no opponents or random boxes, exactly three boosts. Personal bests and optional recorded transform ghosts are local. Comparisons separate course/physics version, vehicle, speed, mirror and assists. |
@@ -43,6 +44,16 @@ Finishers retain their crossing order; remaining AI have fifteen seconds after b
 Mirror reflects physical geometry, banking and navigation. Gliders open only at marked launches. Ordinary jumps remain jumps; press drift immediately after takeoff for a landing boost. Gliding supports pitch and gentle yaw, bounded lift/descent and a return to the driving surface.
 
 Eight selectable original drivers cover light, medium and heavy profiles. Three chassis, three tyre sets and two gliders alter both the procedural model and physics. Each of the five stats is `clamp(1 + driver + chassis + tyres + glider modifiers, 0.75, 1.30)`. Sail provides more lift; Delta trades lift for speed. All 144 combinations have validated bounded stats.
+
+## Balloon Battle
+
+Choose **Race setup → Balloon Battle → Start battle**. Switchyard Plaza is an 88 × 88 m open courtyard with four solid cover islands and intersecting central approaches. Four central double boxes reward exposure; twelve outer boxes form a safer supply loop. Twelve separated pads face inward. Both one-player and two-player split screen retain twelve competitors.
+
+Each successful opponent hit pops one balloon and earns **+1 point**. A self-hit costs one point. Losing all three balloons or requesting rescue costs **2 points**, with scores floored at zero. Inventory clears and the kart waits for **three simulation seconds**; the safest available pad is selected at the end of the hold. Respawn restores three balloons and grants **three seconds of damage protection**. Active respawn holds and the match clock freeze on pause. Cover blocks karts, shells and explosives; leader strikes travel overhead. All eight items use the shared capacity, cooldown, immunity and ownership rules. There are no battle coins or lap checkpoints.
+
+At the buzzer, results freeze. Rank by score, successful opponent hits, fewer balloons lost, earliest successful scoring hit, then original grid order. The winner is named even when scores tie. The HUD shows remaining time, live leaders, points, balloon count, attack warnings and respawn countdowns. Three separate 3D balloons above every kart disappear as hits land, including at low graphics quality.
+
+Arena AI selects available supplies when empty, tracks and predicts moving opponents when armed, routes around cover with a visibility graph, and steers away from spatial item threats and nearby karts. It drives the same physical controller and uses the same items as humans. Recovery attempts reverse first; a manual AI rescue incurs the same score penalty. Race checkpoint logic is inactive in battle. Only Balloon Battle is exposed; additional expanded rule sets remain future scope.
 
 ## Controls
 
@@ -90,7 +101,7 @@ Audio unlocks on Start and includes original generated music, engine pitch, drif
 
 `npm test` covers progress/finish locking, fixed-step timing, inventory, all item systems, saves, ghosts, cup scoring, independent inputs and physical course runs. Browser checks exercise menu-to-race-to-results paths, real keyboard driving and saved data. Development-only testing can grant any item with `document.dispatchEvent(new CustomEvent('kart:force-item', { detail: 'homing' }))`; valid names are `banana`, `shell`, `mushroom`, `homing`, `explosive`, `shield`, `invincibility`, `leader`. Production contains no writable force-item hook. `?debug` enables development telemetry.
 
-Initial HTML/CSS/JavaScript transfer is approximately **187 kB gzip**, without external assets. This is a bundle measurement. Tests use Windows Chromium with software SwiftShader; desktop 1080p/60 fps and physical mobile 30 fps targets, real controllers, Firefox/Safari/Edge and screen-reader sessions remain unmeasured. Hardware rendering benchmarks must be reported separately from accelerated-clock verification.
+Initial HTML/CSS/JavaScript transfer is approximately **194 kB gzip**, without external assets. This is a bundle measurement. Tests use Windows Chromium with software SwiftShader; desktop 1080p/60 fps and physical mobile 30 fps targets, real controllers, Firefox/Safari/Edge and screen-reader sessions remain unmeasured. Hardware rendering benchmarks must be reported separately from accelerated-clock verification.
 
 ## Publish to GitHub Pages
 

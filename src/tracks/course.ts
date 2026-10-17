@@ -109,6 +109,7 @@ function querySegments(course: CourseDefinition, point: Point): Segment[] {
   return index.cells.get(`${Math.floor(point.x / 16)},${Math.floor(point.z / 16)}`) ?? index.all;
 }
 export function sampleTrack(course:CourseDefinition,point:Point&{y?:number}):TrackQuery {
+  if(course.arena)return{x:point.x,z:point.z,tangent:{x:0,z:1},normal:{x:1,z:0},offset:0,distance:Math.max(0,Math.abs(point.x)-course.arena.halfSize,Math.abs(point.z)-course.arena.halfSize),progress:0,height:0,right:{x:1,y:0,z:0},up:{x:0,y:1,z:0},forward:{x:0,y:0,z:1},bank:0,traversal:'grounded',route:'arena',width:course.width,surface:'road',gap:false};
   let score=Infinity,result:TrackQuery|undefined;
   for(const segment of querySegments(course,point)) {
     const {a,b,route,last}=segment;
@@ -141,6 +142,7 @@ export function poseAt(course:CourseDefinition,distance:number,routeId='main'):P
   return {x:a.x+(b.x-a.x)*t,y:a.y+(b.y-a.y)*t,z:a.z+(b.z-a.z)*t,heading:Math.atan2(b.x-a.x,b.z-a.z)};
 }
 export function gridPose(course:CourseDefinition,index:number):Pose {
+  if(course.arena)return{...course.arena.spawns[index%course.arena.spawns.length]!};
   const pose=poseAt(course,-4-Math.floor(index/2)*4.5);
   const lane=(index%2===0?-1:1)*Math.min(2.3,course.width*.23);
   return {...pose,x:pose.x+Math.cos(pose.heading)*lane,z:pose.z-Math.sin(pose.heading)*lane};
