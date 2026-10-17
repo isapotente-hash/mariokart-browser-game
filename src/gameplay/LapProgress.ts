@@ -1,12 +1,18 @@
 import type { CourseDefinition, GameEvent, Point } from '../data/types';
 
 export class LapProgress {
-  readonly racerId = 'player-1';
+  readonly racerId: string;
   nextCheckpoint = 1;
   laps = 0;
   lastLapTime = 0;
   private lapStarted = 0;
-  constructor(private readonly course: CourseDefinition) {}
+  started = true;
+  gatesPassed = 0;
+  constructor(private readonly course: CourseDefinition, racerId = 'player-1', grid = false) {
+    this.racerId = racerId;
+    this.started = !grid;
+    if (grid) this.nextCheckpoint = 0;
+  }
 
   update(previous: Point, current: Point, time: number): GameEvent[] {
     const gate = this.course.checkpoints[this.nextCheckpoint]!;
@@ -23,12 +29,14 @@ export class LapProgress {
     // Reject discontinuities, including future rescue teleports across a gate.
     if (Math.hypot(current.x - previous.x, current.z - previous.z) > 3) return [];
     const events: GameEvent[] = [{ type: 'checkpoint', racerId: this.racerId, checkpoint: this.nextCheckpoint }];
-    if (this.nextCheckpoint === 0) {
+    if (this.nextCheckpoint === 0 && this.started) {
       this.laps++;
       this.lastLapTime = time - this.lapStarted;
       this.lapStarted = time;
       events.push({ type: 'lap', racerId: this.racerId, lap: this.laps, time: this.lastLapTime });
     }
+    if (!this.started) { this.started = true; this.lapStarted = time; }
+    else this.gatesPassed++;
     this.nextCheckpoint = (this.nextCheckpoint + 1) % this.course.checkpoints.length;
     return events;
   }

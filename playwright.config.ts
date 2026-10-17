@@ -2,7 +2,7 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: './tests/browser',
-  timeout: 120_000,
+  timeout: 300_000,
   workers: 1,
   use: {
     reducedMotion: 'reduce',

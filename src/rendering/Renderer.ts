@@ -3,6 +3,8 @@ import type { CourseDefinition, KartState } from '../data/types';
 import { createKart } from './kart';
 import { createCourseScene } from './courseScene';
 import { ChaseCamera } from './ChaseCamera';
+import { RaceVisuals } from './RaceVisuals';
+import type { Race } from '../gameplay/Race';
 
 export class Renderer {
   readonly renderer: THREE.WebGLRenderer;
@@ -12,6 +14,7 @@ export class Renderer {
   private readonly kart = createKart();
   private course: THREE.Group;
   private wheelAngle = 0;
+  private readonly raceVisuals = new RaceVisuals();
 
   constructor(container: HTMLElement, course: CourseDefinition) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
@@ -25,12 +28,12 @@ export class Renderer {
     this.scene.fog = new THREE.Fog('#c4dfd3', 110, 295);
     this.scene.add(new THREE.HemisphereLight('#fff8de', '#718f60', 2.5));
     const sun = new THREE.DirectionalLight('#fff0cb', 3.1); sun.position.set(45, 85, 30);
-    sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+    sun.castShadow = true; sun.shadow.mapSize.set(1024, 1024);
     Object.assign(sun.shadow.camera, { left: -85, right: 85, top: 85, bottom: -85, near: 1, far: 190 });
     sun.shadow.normalBias = 0.05; sun.shadow.bias = -0.0004; this.scene.add(sun);
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000), new THREE.MeshStandardMaterial({ color: '#92b975', roughness: 1 }));
     ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; this.scene.add(ground);
-    this.course = createCourseScene(course); this.scene.add(this.course, this.kart.root);
+    this.course = createCourseScene(course); this.scene.add(this.course, this.kart.root, this.raceVisuals.root);
     this.resize();
   }
   setCourse(course: CourseDefinition): void {
@@ -43,8 +46,10 @@ export class Renderer {
     this.camera.aspect = width / height; this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
   }
-  draw(state: KartState, dt: number, menu: boolean, rear: boolean, steering: number, snap = false): void {
-    this.kart.root.position.set(state.x, 0.09, state.z); this.kart.root.rotation.y = state.heading;
+  draw(state: KartState, dt: number, menu: boolean, rear: boolean, steering: number, snap = false, race?: Race, alpha = 1): void {
+    if (race) this.raceVisuals.sync(race, alpha, !menu);
+    this.kart.root.position.set(state.x, 0.09 + state.hop + (race && !menu && race.player.rescueRemaining > 0 ? 1.5 : 0), state.z);
+    this.kart.root.rotation.y = state.heading + (state.spin > 0 ? (1 - state.spin / 0.7) * Math.PI * 4 : 0);
     this.kart.body.rotation.z = THREE.MathUtils.lerp(this.kart.body.rotation.z, -steering * Math.min(0.07, Math.abs(state.speed) * 0.003), 0.1);
     this.wheelAngle += state.speed * dt / 0.43;
     for (const wheel of this.kart.wheels) wheel.children.forEach((mesh) => { mesh.rotation.x = this.wheelAngle; });

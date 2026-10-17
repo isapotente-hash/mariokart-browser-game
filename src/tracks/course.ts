@@ -88,3 +88,9 @@ export function poseAt(course: CourseDefinition, distance: number): Pose {
   const t = (d - a.distance) / span;
   return { x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, heading: Math.atan2(b.x - a.x, b.z - a.z) };
 }
+
+export function gridPose(course: CourseDefinition, index: number): Pose {
+  const pose = poseAt(course, -4 - Math.floor(index / 2) * 4.5);
+  const lane = (index % 2 === 0 ? -1 : 1) * Math.min(2.2, course.width * 0.23);
+  return { ...pose, x: pose.x + Math.cos(pose.heading) * lane, z: pose.z - Math.sin(pose.heading) * lane };
+}

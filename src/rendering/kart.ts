@@ -2,11 +2,11 @@ import * as THREE from 'three';
 
 export interface KartModel { root: THREE.Group; body: THREE.Group; wheels: THREE.Group[]; frontWheels: THREE.Group[] }
 
-export function createKart(): KartModel {
+export function createKart(color = '#ef6b43'): KartModel {
   const root = new THREE.Group();
   const body = new THREE.Group();
   root.add(body);
-  const paint = new THREE.MeshStandardMaterial({ color: '#ef6b43', roughness: 0.48 });
+  const paint = new THREE.MeshStandardMaterial({ color, roughness: 0.48 });
   const cream = new THREE.MeshStandardMaterial({ color: '#ffedcc', roughness: 0.7 });
   const dark = new THREE.MeshStandardMaterial({ color: '#253f3e', roughness: 0.8 });
   const teal = new THREE.MeshStandardMaterial({ color: '#277e77', roughness: 0.55 });

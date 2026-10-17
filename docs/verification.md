@@ -1,5 +1,7 @@
 # Milestone One verification
 
+Historical Milestone One results. For current race systems and checks, see [Milestone Two verification](verification-m2.md).
+
 Date: 17 October 2026 (Australia/Sydney).
 
 Toolchain: Windows, Node.js 24.19.0, npm 11.17.0, Vite 8.3.4, Three.js 0.186.1 and TypeScript 7.0.2.

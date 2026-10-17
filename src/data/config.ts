@@ -14,4 +14,7 @@ export const config = {
     radius: 0.85,
   },
   camera: { distance: 10, height: 5.2, lookAhead: 7, smoothing: 7 },
+  race: { laps: 3, countdown: 3, finishTimeout: 15, rescueDelay: 2, rescueImmunity: 3, hitImmunity: 2.5, hitSpin: 0.7, coinCap: 10, coinSpeed: 0.003 },
+  drift: { minimumSpeed: 6, thresholds: [0.7, 1.5, 2.5], durations: [0.8, 1.3, 1.9], hopTime: 0.35 },
+  items: { poolSize: 64, pickupCooldown: 0.8, boxRespawn: 4, coinRespawn: 6, armTime: 0.6, ownerGrace: 0.8, trapLife: 25, shellLife: 8, shellSpeed: 34, shellBounces: 4, mushroomTime: 2 },
 } as const;

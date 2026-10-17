@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { CourseDefinition } from '../data/types';
 import { seededRandom } from '../core/random';
-import { sampleTrack } from '../tracks/course';
+import { gridPose, sampleTrack } from '../tracks/course';
 
 function strip(course: CourseDefinition, from: number, to: number, y: number, color: string, alternate?: string): THREE.Mesh {
   const positions: number[] = [];
@@ -53,6 +53,14 @@ export function createCourseScene(course: CourseDefinition): THREE.Group {
     square.position.set((i - 7) * (course.width + 2) / 15, 6, 0); gate.add(square);
   }
   root.add(gate);
+  for (let i = 0; i < 8; i++) {
+    const pose = gridPose(course, i);
+    const mark = new THREE.Group(); mark.position.set(pose.x, 0.085, pose.z); mark.rotation.y = pose.heading;
+    for (const side of [-1, 1]) {
+      const line = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.015, 2.8), white); line.position.x = side * 1.05; mark.add(line);
+    }
+    const line = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.015, 0.1), white); line.position.z = 1.4; mark.add(line); root.add(mark);
+  }
 
   const random = seededRandom(4782);
   const foliageColors = ['#397a50', '#569052', '#7b9c52'];
