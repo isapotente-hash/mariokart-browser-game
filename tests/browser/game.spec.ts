@@ -38,7 +38,7 @@ async function drive(page:Page,id:CourseId,laps:number,shot?:string){
 
 test('production menus, real vehicle selection, settings persistence and independent split-screen controls',async({page})=>{
   const errors=errorsOn(page);await boot(page);await page.screenshot({path:'docs/screenshots/title-m3.png'});
-  await page.locator('#choose-race').click({force:true});await expect(page.locator('[data-course]')).toHaveCount(4);await expect(page.locator('#driver-p1 option')).toHaveCount(8);
+  await page.locator('#choose-race').click({force:true});await expect(page.locator('[data-course]')).toHaveCount(5);await expect(page.locator('#driver-p1 option')).toHaveCount(8);
   await page.locator('#players-select').selectOption('2');await page.locator('#driver-p1').selectOption('ash');await page.locator('#chassis-p1').selectOption('comet');await page.locator('#tyres-p1').selectOption('slick');await page.locator('#glider-p1').selectOption('wing');
   await page.locator('[data-course="harbour-run"]').click({force:true});await expect(page.locator('[data-course="harbour-run"]')).toHaveAttribute('aria-pressed','true');
   await page.locator('[data-course="garden-circuit"]').click({force:true});await page.screenshot({path:'docs/screenshots/setup-m3.png'});

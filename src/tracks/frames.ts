@@ -5,8 +5,9 @@ export function normalize(vector: Vec3): Vec3 {
   return { x: vector.x / length, y: vector.y / length, z: vector.z / length };
 }
 export function cross(a: Vec3, b: Vec3): Vec3 { return { x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x }; }
-export function trackFrame(sample: Pick<CourseSample, 'tangent' | 'slope' | 'bank'>): { forward: Vec3; right: Vec3; up: Vec3 } {
+export function trackFrame(sample: Pick<CourseSample, 'tangent' | 'slope' | 'bank' | 'up'>): { forward: Vec3; right: Vec3; up: Vec3 } {
   const forward = normalize({ ...sample.tangent, y: sample.slope });
+  if(sample.up){const right=normalize(cross(sample.up,forward));return{forward,right,up:normalize(cross(forward,right))};}
   const flatRight = { x: sample.tangent.z, y: 0, z: -sample.tangent.x };
   const flatUp = normalize(cross(forward, flatRight));
   const c = Math.cos(sample.bank), s = Math.sin(sample.bank);

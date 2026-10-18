@@ -40,7 +40,7 @@ export class SettingsPanel {
     const mapping=this.settings.controls[player],duplicate=(Object.keys(mapping) as (keyof ControlBindings)[]).find((key)=>mapping[key]===event.code);
     if(duplicate)mapping[duplicate]=mapping[action];mapping[action]=event.code;this.cancel();this.onChange(structuredClone(this.settings));this.status(`Player ${player+1} ${actions[action]} is now ${keyLabel(event.code)}.`);
   };
-  cancel():void{this.waiting=null;window.removeEventListener('keydown',this.capture,true);}
+  cancel():void{if(this.waiting){const{player,action}=this.waiting;const button=this.root.querySelector<HTMLButtonElement>(`[data-player="${player}"][data-action="${action}"]`);if(button)button.textContent=keyLabel(this.settings.controls[player][action]);}this.waiting=null;window.removeEventListener('keydown',this.capture,true);}
   status(text:string):void{this.root.querySelector('#remap-status')!.textContent=text;}
   render(data:SaveData,status:string):void{
     this.settings=structuredClone(data.settings);

@@ -1,6 +1,6 @@
-# Pocket Circuit · Milestone Four
+# Pocket Circuit · Racing, Battle & Electrodrome
 
-An original browser kart racer built with TypeScript, Three.js and Vite. The release implements page 9 of [Specification.md](Specification.md): four courses, twelve racers, eight original drivers, vehicle customization, eight items, special traversal, three racing modes plus Balloon Battle, local split screen, saves, procedural audio and quality presets. No Nintendo assets or external media are used.
+An original browser kart racer built with TypeScript, Three.js and Vite. The release implements page 9 of [Specification.md](Specification.md): four courses, twelve racers, eight original drivers, vehicle customization, eight items, special traversal, three racing modes plus Balloon Battle, local split screen, saves, procedural audio and quality presets. Electrodrome is an additional user-supplied imported course; its embedded attribution is preserved in [the asset credits](public/assets/tracks/README.md).
 
 ## Run
 
@@ -21,7 +21,7 @@ npx playwright install chromium
 npm run test:browser
 ```
 
-Browser checks use the production build, real DOM controls and keyboard driving. `?course=short` uses compact versions of the four release courses for practical completion checks; traversal remains active. Normal play uses the full courses. See [Battle Mode verification](docs/verification-m4.md), [release verification](docs/verification-m3.md) and [Milestone Two verification](docs/verification-m2.md).
+Browser checks use the production build, real DOM controls and keyboard driving. `?course=short` uses compact versions of the four release courses for practical completion checks; traversal remains active. Normal play uses the full courses. See [Electrodrome verification](docs/verification-electrodrome.md), [Battle Mode verification](docs/verification-m4.md), [release verification](docs/verification-m3.md) and [Milestone Two verification](docs/verification-m2.md).
 
 ## Play
 
@@ -36,6 +36,7 @@ Finishers retain their crossing order; remaining AI have fifteen seconds after b
 
 | Course | Features |
 | --- | --- |
+| Electrodrome (bonus) | Supplied GLB venue, elevated magnetic roads including inverted sections, long glider jump and a magnetic return connector. Available in Versus and Time Trial; the four-race Grand Prix remains unchanged. |
 | Garden Circuit | Hills, an ordinary jump/trick ramp and a grassy inside branch. |
 | Harbour Run | Underwater tunnel with altered drag/grip, moving cargo and an outer pier route. |
 | Sky Foundry | Banked anti-gravity surface, local gravity/camera alignment, glider launch and lower recovery route. |
@@ -101,7 +102,7 @@ Audio unlocks on Start and includes original generated music, engine pitch, drif
 
 `npm test` covers progress/finish locking, fixed-step timing, inventory, all item systems, saves, ghosts, cup scoring, independent inputs and physical course runs. Browser checks exercise menu-to-race-to-results paths, real keyboard driving and saved data. Development-only testing can grant any item with `document.dispatchEvent(new CustomEvent('kart:force-item', { detail: 'homing' }))`; valid names are `banana`, `shell`, `mushroom`, `homing`, `explosive`, `shield`, `invincibility`, `leader`. Production contains no writable force-item hook. `?debug` enables development telemetry.
 
-Initial HTML/CSS/JavaScript transfer is approximately **194 kB gzip**, without external assets. This is a bundle measurement. Tests use Windows Chromium with software SwiftShader; desktop 1080p/60 fps and physical mobile 30 fps targets, real controllers, Firefox/Safari/Edge and screen-reader sessions remain unmeasured. Hardware rendering benchmarks must be reported separately from accelerated-clock verification.
+Initial HTML/CSS/JavaScript transfer is approximately **244 kB gzip**, plus the **763 kB supplied JPEG home artwork**, before the imported model. Selecting Electrodrome downloads its 15.5 MB GLB; other courses do not request it. This is a bundle measurement. Tests use Windows Chromium with software SwiftShader; desktop 1080p/60 fps and physical mobile 30 fps targets, real controllers, Firefox/Safari/Edge and screen-reader sessions remain unmeasured. Hardware rendering benchmarks must be reported separately from accelerated-clock verification.
 
 ## Publish to GitHub Pages
 
@@ -116,7 +117,7 @@ Node 24 is used locally and in Actions. Only the deployment job receives `pages:
 
 ## Assets and troubleshooting
 
-All models, scenery, icons, effects and sounds are original procedural source. Fonts are system fonts; no media download is required.
+The original courses, drivers, icons, effects and sounds are procedural source. Electrodrome uses the supplied GLB with its own source/license metadata, credited separately. The home screen uses the supplied Mario Kart image with functional local mode buttons. Fonts are system fonts. See the [home screen and game bug audit](docs/bug-audit-2026-10-18.md) for collision, camera, input and recovery fixes and their verification.
 
 - Blank screen: enable hardware acceleration/WebGL 2 and use the correct subpath. Unsupported graphics show an explanatory screen.
 - Missing assets: verify `VITE_BASE_PATH`; serve `dist` with preview instead of opening `file://`.

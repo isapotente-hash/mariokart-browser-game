@@ -4,6 +4,7 @@ import { config } from '../data/config';
 import type { Difficulty } from '../data/options';
 import type { Racer } from '../gameplay/Racer';
 import { poseAt, sampleTrack } from '../tracks/course';
+import { normalize,cross } from '../tracks/frames';
 
 const angleDifference = (a: number, b: number) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 
@@ -38,6 +39,17 @@ export class AiDriver {
     }
     const useItem = racer.inventory.active !== null && racer.inventory.drawRemaining === 0 && this.itemTimer <= 0 && state.spin === 0;
     if (useItem) this.itemTimer = this.traits.itemDelay;
+    if(course.imported){
+      const road=sampleTrack(course,state),look=3+Math.abs(state.speed)*.4,target=poseAt(course,road.progress+look),far=sampleTrack(course,poseAt(course,road.progress+look+8));
+      if(['gliding','jumping','falling'].includes(state.traversal)){
+        const desired=Math.atan2(target.x-state.x,target.z-state.z),error=angleDifference(desired,state.heading),zone=course.launches.find(z=>z.glider)!,landing=poseAt(course,zone.landing),remaining=Math.max(2,zone.landing-road.progress),descent=(landing.y!-state.y)/Math.max(.5,remaining/Math.max(4,state.speed));this.behavior='airborne';
+        return{throttle:true,brake:false,steering:Math.max(-1,Math.min(1,error*2)),pitch:Math.max(-1,Math.min(1,(descent-state.vy)*.14)),useItem};
+      }
+      const f=state.forward??road.forward,right=cross(state.up,f),aim=normalize({x:target.x-state.x,y:target.y!-state.y,z:target.z-state.z}),dot=(a:typeof f,b:typeof f)=>a.x*b.x+a.y*b.y+a.z*b.z;
+      let error=Math.atan2(dot(aim,right),dot(aim,f));const blocker=hazards.find(p=>Math.hypot(p.x-state.x,p.z-state.z)<6);if(blocker)error+=(road.offset>0?-.15:.15);
+      const curvature=Math.acos(Math.max(-1,Math.min(1,dot(road.forward,far.forward))))/(look+8),targetSpeed=Math.max(4,Math.min(19*this.traits.pace*racer.controller.speedScale,.95/Math.max(.015,curvature)))*(Math.abs(error)>.6?.55:1);this.behavior=blocker?'overtaking':'normal';
+      return{throttle:state.speed<targetSpeed,brake:state.speed>targetSpeed+.6,steering:Math.max(-1,Math.min(1,error*3.5)),useItem,rearward:racer.inventory.active==='banana'};
+    }
     this.reactionTimer -= dt;
     if (this.reactionTimer <= 0) {
       this.reactionTimer = this.traits.reaction;

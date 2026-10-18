@@ -3,7 +3,7 @@ import test from 'node:test';
 import { Race } from '../src/gameplay/Race';
 import { AiDriver } from '../src/ai/AiDriver';
 import { createCourse, poseAt } from '../src/tracks/course';
-import { courseIds, defaultSettings } from '../src/data/options';
+import { cupCourseIds, defaultSettings } from '../src/data/options';
 import { itemKinds, drawItem } from '../src/data/items';
 import type { DrivingInput, ItemKind } from '../src/data/types';
 
@@ -70,7 +70,7 @@ test('homing follows a turn-limited course target; leader warnings precede a cou
   assert.equal(race.items.objects.some((object)=>object.active&&object.kind==='leader'),false);assert.equal(target.controller.state.spin,0);
 });
 
-for(const id of courseIds)test(`twelve-racer physical one-lap route validation: ${id}`,()=>{
+for(const id of cupCourseIds)test(`twelve-racer physical one-lap route validation: ${id}`,()=>{
   const course=createCourse(id),race=new Race(course,4782,{...defaultSettings(),laps:1,items:'none'}),driver=new AiDriver(2026);
   const traversal=new Set<string>();
   for(let i=0;i<60*180&&race.state!=='results';i++){

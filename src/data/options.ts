@@ -1,4 +1,5 @@
-export const courseIds = ['garden-circuit', 'harbour-run', 'sky-foundry', 'starlight-causeway'] as const;
+export const cupCourseIds = ['garden-circuit', 'harbour-run', 'sky-foundry', 'starlight-causeway'] as const;
+export const courseIds = [...cupCourseIds, 'electrodrome'] as const;
 export type CourseId = typeof courseIds[number];
 export type GameMode = 'versus' | 'grand-prix' | 'time-trial' | 'balloon-battle';
 export type Quality = 'low' | 'medium' | 'high';

@@ -10,6 +10,7 @@ import type { Settings,VehicleBuild } from '../data/options';
 import { disposeGroup,orient } from './resources';
 import { sampleGhost } from '../platform/Ghosts';
 import type { GhostRecord } from '../platform/Ghosts';
+import {disposeImportedCourse} from './importedCourse';
 
 export interface Viewport {x:number;top:number;width:number;height:number}
 export function computeViewports(width:number,height:number,players:number,layout:Settings['split']='auto'):Viewport[]{
@@ -21,7 +22,7 @@ export function computeViewports(width:number,height:number,players:number,layou
 export class Renderer {
   readonly renderer:THREE.WebGLRenderer;
   private readonly scene=new THREE.Scene();
-  private readonly cameras=[new THREE.PerspectiveCamera(54,1,.1,480),new THREE.PerspectiveCamera(54,1,.1,480)];
+  private readonly cameras=[new THREE.PerspectiveCamera(54,1,.25,480),new THREE.PerspectiveCamera(54,1,.25,480)];
   private readonly chases=this.cameras.map((camera)=>new ChaseCamera(camera));
   private menuModel=createKart();private menuKey='';
   private readonly raceVisuals=new RaceVisuals();
@@ -39,7 +40,7 @@ export class Renderer {
     this.ground.rotation.x=-Math.PI/2;this.ground.receiveShadow=true;this.scene.add(this.ground);
     this.course=createCourseScene(course);this.scene.add(this.course,this.menuModel.root,this.raceVisuals.root);this.collectBlockers();this.applySettings(this.settings);this.resize();
   }
-  private collectBlockers():void {this.blockers=[];this.course.traverse((object)=>{if(object.userData.cameraBlocker)this.blockers.push(object);});}
+  private collectBlockers():void {this.course.updateMatrixWorld(true);this.blockers=[];this.course.traverse((object)=>{if(object.userData.cameraBlocker)this.blockers.push(object);});}
   setCourse(course:CourseDefinition):void {this.scene.remove(this.course);disposeGroup(this.course);this.courseData=course;this.course=createCourseScene(course,this.settings.quality);this.scene.add(this.course);this.collectBlockers();}
   applySettings(settings:Settings):void {
     const changed=this.settings.quality!==settings.quality;this.settings=structuredClone(settings);const profile=qualityProfiles[settings.quality];
@@ -66,7 +67,7 @@ export class Renderer {
   draw(state:KartState,dt:number,menu:boolean,rear:boolean,steering:number,snap=false,race?:Race,alpha=1):void {
     const movingQuality=race&&race.humans.length===2&&this.settings.quality==='high'?'medium':this.settings.quality;
     if(race)this.raceVisuals.sync(race,alpha,!menu,dt,movingQuality,this.ghost&&this.settings.ghost?sampleGhost(this.ghost,race.time):null);
-    this.menuModel.root.visible=menu;this.menuModel.root.position.set(state.x,state.y+.09,state.z);orient(this.menuModel.root,state.heading,state.up);this.menuModel.body.rotation.z=-steering*.02;
+    this.menuModel.root.visible=menu;this.menuModel.root.position.set(state.x,state.y+.09,state.z);orient(this.menuModel.root,state.heading,state.up,0,state.forward);this.menuModel.body.rotation.z=-steering*.02;
     const humans=menu?[]:race?.humans??[],views=this.getViewports(Math.max(1,humans.length));
     this.sun.position.set(state.x+45,state.y+85,state.z+30);this.sun.target.position.set(state.x,state.y,state.z);this.sun.target.updateMatrixWorld();
     this.renderer.setScissorTest(true);this.renderer.shadowMap.needsUpdate=true;
@@ -81,5 +82,5 @@ export class Renderer {
     }
     this.renderer.setScissorTest(false);
   }
-  dispose():void {disposeGroup(this.scene);this.sun.shadow.dispose();this.renderer.dispose();this.renderer.domElement.remove();}
+  dispose():void {disposeGroup(this.scene);disposeImportedCourse();this.sun.shadow.dispose();this.renderer.dispose();this.renderer.domElement.remove();}
 }

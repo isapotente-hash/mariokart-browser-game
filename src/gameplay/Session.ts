@@ -1,4 +1,4 @@
-import { courseIds,raceOptions } from '../data/options';
+import { cupCourseIds,raceOptions } from '../data/options';
 import type { RaceOptions } from '../data/options';
 import { createCup,advanceCup,cupRanking } from './Cup';
 import type { SaveStore } from '../platform/SaveStore';
@@ -14,7 +14,7 @@ export class Session {
     if(selected.mode==='grand-prix'){
       if(!resume||!this.saves.data.cup||this.saves.data.cup.completed)this.saves.data.cup=createCup(selected);
       const cup=this.saves.data.cup!;this.cupId=cup.id;this.cupIndex=cup.nextRace;
-      selected={...cup.options,course:courseIds[cup.nextRace]!};
+      selected={...cup.options,course:cupCourseIds[cup.nextRace]!};
     }else{this.cupId='';this.cupIndex=0;}
     this.active=selected;this.saves.data.settings={...this.saves.data.settings,...selected};this.saves.save();return structuredClone(selected);
   }

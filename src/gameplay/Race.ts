@@ -55,9 +55,10 @@ export class Race {
     let pose=racer.grid;
     if(racer.progress.started){
       let last=(racer.progress.nextCheckpoint+11)%12;
-      for(let i=0;i<12&&this.course.samples[last*30]!.gap;i++)last=(last+11)%12;
+      for(let i=0;i<12&&sampleTrack(this.course,this.course.checkpoints[last]!).gap;i++)last=(last+11)%12;
       const gate=this.course.checkpoints[last]!;
       pose={x:gate.x+Math.sin(gate.heading),z:gate.z+Math.cos(gate.heading),heading:gate.heading};pose.y=sampleTrack(this.course,pose).height;
+      if(this.course.imported)pose={x:gate.x+gate.forward!.x,y:gate.y!+gate.forward!.y,z:gate.z+gate.forward!.z,heading:gate.heading,forward:gate.forward};
     }
     racer.controller.reset(pose);racer.controller.state.immunity=config.race.rescueImmunity;
     racer.rescueRemaining=config.race.rescueDelay;racer.rescues++;racer.wrongWayTime=0;
@@ -65,18 +66,21 @@ export class Race {
     return[{type:'rescue',racerId:racer.id}];
   }
   protected collisions():GameEvent[]{
-    const events:GameEvent[]=[];
+    const events:GameEvent[]=[],contacts=new Set<Racer>();
     for(let i=0;i<this.racers.length;i++)for(let j=i+1;j<this.racers.length;j++){
       const a=this.racers[i]!,b=this.racers[j]!,sa=a.controller.state,sb=b.controller.state;
-      if(a.finishTime!==null||b.finishTime!==null||a.rescueRemaining>0||b.rescueRemaining>0||Math.abs(sa.y-sb.y)>1.5)continue;
-      const x=sa.x-sb.x,z=sa.z-sb.z,distance=Math.hypot(x,z);
+      if(a.finishTime!==null||b.finishTime!==null||a.rescueRemaining>0||b.rescueRemaining>0||(!this.course.imported&&Math.abs(sa.y-sb.y)>1.5))continue;
+      const x=sa.x-sb.x,y=this.course.imported?sa.y-sb.y:0,z=sa.z-sb.z,distance=Math.hypot(x,y,z);
       if(distance>=config.kart.radius*2)continue;
-      const nx=distance>.001?x/distance:1,nz=distance>.001?z/distance:0,correction=Math.min(.4,(config.kart.radius*2-distance)*.5);
-      sa.x+=nx*correction;sa.z+=nz*correction;sb.x-=nx*correction;sb.z-=nz*correction;
-      const relative=(sa.vx-sb.vx)*nx+(sa.vz-sb.vz)*nz;
-      if(relative<0){const impulse=Math.min(2,-relative*.5);sa.vx+=nx*impulse;sa.vz+=nz*impulse;sb.vx-=nx*impulse;sb.vz-=nz*impulse;}
+      const fallback=this.course.imported&&distance<=.001?sampleTrack(this.course,sa).right:{x:1,y:0,z:0};
+      const nx=distance>.001?x/distance:fallback.x,ny=distance>.001?y/distance:fallback.y,nz=distance>.001?z/distance:fallback.z,correction=Math.min(.4,(config.kart.radius*2-distance)*.5);
+      contacts.add(a);contacts.add(b);
+      sa.x+=nx*correction;sa.y+=ny*correction;sa.z+=nz*correction;sb.x-=nx*correction;sb.y-=ny*correction;sb.z-=nz*correction;
+      const relative=(sa.vx-sb.vx)*nx+(sa.vy-sb.vy)*ny+(sa.vz-sb.vz)*nz;
+      if(relative<0){const impulse=Math.min(2,-relative*.5);sa.vx+=nx*impulse;sa.vy+=ny*impulse;sa.vz+=nz*impulse;sb.vx-=nx*impulse;sb.vy-=ny*impulse;sb.vz-=nz*impulse;}
       if(relative<-.5&&sa.traversal==='anti-gravity'&&sb.traversal==='anti-gravity')for(const racer of[a,b]){racer.controller.boost(.45);events.push({type:'boost',racerId:racer.id});}
     }
+    if(this.course.imported)for(const racer of contacts)racer.controller.constrainToRoad();
     for(const hazard of this.course.hazards){
       const pose=hazardPose(this.course,hazard,this.time);
       for(const racer of this.racers){const state=racer.controller.state;
@@ -105,7 +109,7 @@ export class Race {
       if(!racer.player)racer.input=this.brains.get(racer.id)!.read(this.course,racer,this.racers,dt,hazards);
       if(racer.input.rescue){events.push(...this.rescue(racer));continue;}
       const state=racer.controller.state,road=sampleTrack(this.course,state);
-      if(![state.x,state.y,state.z,state.heading,state.vx,state.vy,state.vz].every(Number.isFinite)||road.distance>this.course.width+15||state.y<road.height-8){events.push(...this.rescue(racer));continue;}
+      if(![state.x,state.y,state.z,state.heading,state.vx,state.vy,state.vz].every(Number.isFinite)||(this.course.imported?(state.y< -80||(!['gliding','jumping','falling'].includes(state.traversal)&&road.distance>this.course.width+15)):road.distance>this.course.width+15||state.y<road.height-8)){events.push(...this.rescue(racer));continue;}
       const beforeBoost=state.boost;racer.controller.coinBonus=racer.coins*config.race.coinSpeed;racer.controller.update(racer.input,dt);
       if(state.boost>beforeBoost+.1)events.push({type:'boost',racerId:racer.id});
       if(racer.input.useItem){
@@ -115,7 +119,7 @@ export class Race {
           if(racer.trialBoosts>Number(!!racer.inventory.active)+Number(!!racer.inventory.reserve)){racer.inventory.add('mushroom');racer.inventory.drawRemaining=0;}
         }
       }
-      const along=state.vx*road.tangent.x+state.vz*road.tangent.z;
+      const along=this.course.imported?state.vx*road.forward.x+state.vy*road.forward.y+state.vz*road.forward.z:state.vx*road.tangent.x+state.vz*road.tangent.z;
       racer.wrongWayTime=along<-1.5?racer.wrongWayTime+dt:Math.max(0,racer.wrongWayTime-dt*2);
     }
     events.push(...this.collisions());
@@ -124,7 +128,7 @@ export class Race {
       if(racer.finishTime!==null||racer.rescueRemaining>0)continue;
       events.push(...racer.progress.update(racer.previous,racer.controller.state,this.time));racer.distance=validatedDistance(this.course,racer);
       if(racer.progress.laps>=this.options.laps){
-        const gate=this.course.checkpoints[0]!,along=(point:{x:number;z:number})=>(point.x-gate.x)*Math.sin(gate.heading)+(point.z-gate.z)*Math.cos(gate.heading);
+        const gate=this.course.checkpoints[0]!,along=(point:{x:number;y?:number;z:number})=>(point.x-gate.x)*(gate.forward?.x??Math.sin(gate.heading))+(point.z-gate.z)*(gate.forward?.z??Math.cos(gate.heading))+((point.y??0)-(gate.y??0))*(gate.forward?.y??0);
         const before=along(racer.previous),after=along(racer.controller.state),fraction=Math.max(0,Math.min(1,-before/(after-before)));
         finishers.push({racer,time:this.time-dt+fraction*dt});
       }

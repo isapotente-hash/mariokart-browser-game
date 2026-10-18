@@ -1,13 +1,14 @@
 export interface Point { x: number; z: number }
 export interface Vec3 extends Point { y: number }
 export type Traversal = 'grounded' | 'underwater' | 'anti-gravity' | 'gliding' | 'jumping' | 'falling';
-export interface Pose extends Point { heading: number; y?: number }
+export interface Pose extends Point { heading: number; y?: number; forward?:Vec3 }
 export interface CourseSample extends Point {
   tangent: Point;
   distance: number;
   y: number; bank: number; slope: number; traversal: 'grounded' | 'underwater' | 'anti-gravity'; gap: boolean;
+  up?:Vec3; width?:number; connector?:boolean;
 }
-export interface Checkpoint extends Pose { halfWidth: number }
+export interface Checkpoint extends Pose { halfWidth: number; distance?:number; right?:Vec3; up?:Vec3 }
 export interface ArenaDefinition {
   halfSize: number;
   obstacles: { x:number; z:number; halfWidth:number; halfDepth:number; height:number }[];
@@ -29,9 +30,11 @@ export interface CourseDefinition {
   launches: { from: number; to: number; landing: number; glider: boolean }[];
   exposed: boolean;
   arena?: ArenaDefinition;
+  imported?: {asset:string};
 }
 export interface DrivingInput { throttle: boolean; brake: boolean; steering: number; drift?: boolean; useItem?: boolean; rearward?: boolean; rescue?: boolean; pitch?: number; rearView?: boolean }
 export interface KartState extends Pose {
+  trackProgress?:number;
   vx: number; vz: number; speed: number; surface: 'road' | 'grass' | 'underwater' | 'anti-gravity' | 'boost';
   boost: number; spin: number; immunity: number; hop: number;
   driftCharge: number; driftSide: number; driftStage: number;

@@ -1,4 +1,4 @@
-import { courseIds, defaultSettings, raceOptions } from '../data/options';
+import { courseIds, cupCourseIds, defaultSettings, raceOptions } from '../data/options';
 import type { Settings, ControlBindings } from '../data/options';
 import { validateBuild } from '../data/content';
 import type { CupProgress, CupStanding } from '../gameplay/Cup';
@@ -46,12 +46,12 @@ export function validateSettings(value: unknown): Settings {
 }
 function validateCup(value: unknown): CupProgress | null {
   const cup = record(value);
-  if (typeof cup.id !== 'string' || cup.id.length > 80 || !Number.isInteger(cup.nextRace) || Number(cup.nextRace) < 0 || Number(cup.nextRace) > courseIds.length || !Array.isArray(cup.standings) || cup.standings.length > 12) return null;
+  if (typeof cup.id !== 'string' || cup.id.length > 80 || !Number.isInteger(cup.nextRace) || Number(cup.nextRace) < 0 || Number(cup.nextRace) > cupCourseIds.length || !Array.isArray(cup.standings) || cup.standings.length > 12) return null;
   const standings: CupStanding[] = [];
   for (const input of cup.standings) {
     const row = record(input);
     if (typeof row.id !== 'string' || !/^(player-[12]|ai-\d{1,2})$/.test(row.id) || typeof row.name !== 'string' || row.name.length > 35) return null;
-    standings.push({ id: row.id, name: row.name, points: Math.round(number(row.points, 0, 0, Math.max(...cupPoints) * courseIds.length)), wins: Math.round(number(row.wins, 0, 0, courseIds.length)), lastPlace: Math.round(number(row.lastPlace, 12, 1, 12)) });
+    standings.push({ id: row.id, name: row.name, points: Math.round(number(row.points, 0, 0, Math.max(...cupPoints) * cupCourseIds.length)), wins: Math.round(number(row.wins, 0, 0, cupCourseIds.length)), lastPlace: Math.round(number(row.lastPlace, 12, 1, 12)) });
   }
   if (new Set(standings.map((row) => row.id)).size !== standings.length || (Number(cup.nextRace) > 0 && standings.length !== 12)) return null;
   const options = validateSettings(cup.options);
@@ -60,7 +60,7 @@ function validateCup(value: unknown): CupProgress | null {
   if (standings.some((row) => !expected.has(row.id) || row.wins > races || row.points > Math.max(...cupPoints) * races)) return null;
   if (races === 0 && standings.length !== 0) return null;
   if (races > 0 && (new Set(standings.map((row) => row.lastPlace)).size !== 12 || standings.reduce((sum, row) => sum + row.wins, 0) !== races || standings.reduce((sum, row) => sum + row.points, 0) !== cupPoints.reduce<number>((sum, points) => sum + points, 0) * races)) return null;
-  return { id: cup.id, nextRace: Number(cup.nextRace), options: raceOptions({ ...options, mode: 'grand-prix', laps: 3 }), standings, completed: cup.nextRace === courseIds.length };
+  return { id: cup.id, nextRace: Number(cup.nextRace), options: raceOptions({ ...options, mode: 'grand-prix', laps: 3 }), standings, completed: cup.nextRace === cupCourseIds.length };
 }
 export function validateSave(value: unknown): SaveData {
   const input = record(value);

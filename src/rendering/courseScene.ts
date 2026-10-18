@@ -7,6 +7,7 @@ import type { Quality } from '../data/options';
 import { qualityProfiles } from '../data/options';
 import { orient } from './resources';
 import { createArenaScene } from './arenaScene';
+import { createImportedCourseScene } from './importedCourse';
 
 function strip(samples:CourseSample[],from:number,to:number,above:number,color:string,alternate?:string,closed=true):THREE.Mesh {
   const positions:number[]=[],colors:number[]=[];
@@ -21,6 +22,7 @@ function strip(samples:CourseSample[],from:number,to:number,above:number,color:s
 }
 export function createCourseScene(course:CourseDefinition,quality:Quality='medium'):THREE.Group {
   if(course.arena)return createArenaScene(course);
+  if(course.imported)return createImportedCourseScene(course,quality);
   const root=new THREE.Group(),half=course.width/2,night=course.theme==='starlight',harbour=course.theme==='harbour',foundry=course.theme==='foundry';
   const profile=qualityProfiles[quality];
   const white=new THREE.MeshStandardMaterial({color:'#f3e9cf'}),dark=new THREE.MeshStandardMaterial({color:night?'#222e5c':'#29463f'}),accent=new THREE.MeshStandardMaterial({color:night?'#65d9dc':harbour?'#e9b969':'#f0794f',emissive:night?'#183d51':'#000000'});

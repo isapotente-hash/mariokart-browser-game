@@ -6,7 +6,7 @@ import { config } from '../data/config';
 import type { Quality, VehicleBuild } from '../data/options';
 import { qualityProfiles } from '../data/options';
 import { hazardPose, sampleTrack } from '../tracks/course';
-import { orient, disposeGroup } from './resources';
+import { orient, disposeGroup,interpolateHeading } from './resources';
 import type { GhostFrame } from '../platform/Ghosts';
 
 export class RaceVisuals {
@@ -15,6 +15,7 @@ export class RaceVisuals {
   private pickups:THREE.Object3D[]=[];private objects:THREE.Group[]=[];private effects:THREE.Group[]=[];private bubbles:THREE.Group[]=[];private hazards:THREE.Mesh[]=[];
   private ghost:KartModel|null=null;private ghostKey='';
   private balloons:THREE.Group[]=[];
+  private readonly previousRotation=new THREE.Quaternion();
   private readonly kinds=['banana','shell','homing','explosive','leader','burst'];
   constructor(){
     const mat=(color:string)=>new THREE.MeshStandardMaterial({color,roughness:.6});
@@ -54,11 +55,15 @@ export class RaceVisuals {
       const racer=race.racers[i];
       if(!racer){if(this.models[i])this.models[i]!.root.visible=false;this.effects[i]!.visible=false;this.bubbles[i]!.visible=false;this.balloons[i]!.visible=false;continue;}
       const state=racer.controller.state,previous=racer.previous,model=this.model(i,racer.controller.build);
+      model.root.name=racer.id;
       const x=THREE.MathUtils.lerp(previous.x,state.x,alpha),y=THREE.MathUtils.lerp(previous.y,state.y,alpha),z=THREE.MathUtils.lerp(previous.z,state.z,alpha);
-      const heading=THREE.MathUtils.lerp(previous.heading,state.heading,alpha),up={x:THREE.MathUtils.lerp(previous.up.x,state.up.x,alpha),y:THREE.MathUtils.lerp(previous.up.y,state.up.y,alpha),z:THREE.MathUtils.lerp(previous.up.z,state.up.z,alpha)};
+      const heading=interpolateHeading(previous.heading,state.heading,alpha),up={x:THREE.MathUtils.lerp(previous.up.x,state.up.x,alpha),y:THREE.MathUtils.lerp(previous.up.y,state.up.y,alpha),z:THREE.MathUtils.lerp(previous.up.z,state.up.z,alpha)};
       const balloons=this.balloons[i]!;balloons.visible=!!race.battle;balloons.position.set(x,y+3.1+Math.sin(race.time*2+i)*.08,z);balloons.rotation.y=heading;for(let j=0;j<3;j++)balloons.children[j]!.visible=j<(race.battle?.stats[racer.id]?.balloons??0);
-      model.root.visible=true;model.root.position.set(x,y+.09+state.hop+(racer.rescueRemaining>0?1.5:0),z);
-      orient(model.root,heading+(state.spin>0?(1-state.spin/config.race.hitSpin)*Math.PI*4:0),up,state.traversal==='gliding'?state.pitch:0);
+      const smooth=!!race.course.imported&&dt>0&&model.root.visible&&model.root.position.distanceToSquared(new THREE.Vector3(x,y,z))<144;
+      this.previousRotation.copy(model.root.quaternion);
+      const lift=(race.course.imported?.2:.09)+state.hop+(racer.rescueRemaining>0?1.5:0);model.root.visible=true;model.root.position.set(x+up.x*lift,y+up.y*lift,z+up.z*lift);
+      orient(model.root,heading+(state.spin>0?(1-state.spin/config.race.hitSpin)*Math.PI*4:0),up,state.traversal==='gliding'?state.pitch:0,state.forward);if(state.forward&&state.spin>0)model.root.rotateY((1-state.spin/config.race.hitSpin)*Math.PI*4);
+      if(smooth){this.previousRotation.slerp(model.root.quaternion,1-Math.exp(-18*dt));model.root.quaternion.copy(this.previousRotation);}
       model.body.rotation.z=racer.finishTime!==null?Math.sin(race.time*6)*.04:-racer.input.steering*Math.min(.07,Math.abs(state.speed)*.003);
       model.body.position.y=racer.finishTime!==null?.05+Math.sin(race.time*7)*.04:0;
       this.angles[i]=(this.angles[i]??0)+state.speed*dt/.43;
@@ -66,18 +71,18 @@ export class RaceVisuals {
       for(const wheel of model.wheels)wheel.rotation.z=state.traversal==='anti-gravity'?(wheel.position.x>0?-1:1)*Math.PI/2:0;
       for(const wheel of model.frontWheels)wheel.rotation.y=racer.input.steering*.35;
       model.glider.visible=state.traversal==='gliding';
-      const effects=this.effects[i]!;effects.visible=true;effects.position.set(x,y+.1,z);orient(effects,heading,up);
+      const effects=this.effects[i]!;effects.visible=true;effects.position.set(x+up.x*.1,y+up.y*.1,z+up.z*.1);orient(effects,heading,up,0,state.forward);
       effects.children[0]!.visible=state.boost>0;
       for(let j=1;j<=2;j++){const spark=effects.children[j] as THREE.Mesh<THREE.BufferGeometry,THREE.MeshBasicMaterial>;spark.visible=state.driftStage>0&&particles>0;spark.material.color.set(['#65c9ff','#65c9ff','#f2a33b','#c781f5'][state.driftStage]!);spark.scale.setScalar(1+state.driftStage*.3);}
       effects.children[3]!.visible=state.immunity>0||racer.rescueRemaining>0;effects.children[4]!.visible=state.shield>0;effects.children[5]!.visible=state.invincible>0;
       const bubbles=this.bubbles[i]!;bubbles.visible=state.traversal==='underwater'&&particles>0;bubbles.position.set(x,y,z);
       for(let j=0;j<bubbles.children.length;j++){const bubble=bubbles.children[j]!;bubble.visible=j<(particles===2?16:7);bubble.position.set(Math.sin(j*4.7+race.time)*1.2,(j*.3+race.time*1.5)%4,Math.cos(j*3.1+race.time)*1.2);}
     }
-    for(let i=0;i<this.pickups.length;i++){const model=this.pickups[i]!,pickup=race.items.pickups[i];model.visible=!!pickup&&pickup.enabled&&pickup.cooldown<=0;if(!pickup)continue;model.children[0]!.visible=pickup.kind==='box';model.children[1]!.visible=pickup.kind==='coin';model.position.set(pickup.x,pickup.y+(pickup.kind==='box'?1.25:.95),pickup.z);model.rotation.y=race.time*1.3;model.scale.setScalar(pickup.double?1.12:1);}
+    for(let i=0;i<this.pickups.length;i++){const model=this.pickups[i]!,pickup=race.items.pickups[i];model.visible=!!pickup&&pickup.enabled&&pickup.cooldown<=0;if(!pickup)continue;model.children[0]!.visible=pickup.kind==='box';model.children[1]!.visible=pickup.kind==='coin';model.position.set(pickup.x,pickup.y+(pickup.kind==='box'?1.25:.95),pickup.z);model.rotation.y=race.time*1.3;model.scale.setScalar(pickup.double?1.12:1);if(race.course.imported){const road=sampleTrack(race.course,pickup),height=pickup.kind==='box'?1.25:.95;model.position.set(pickup.x+road.up.x*height,pickup.y+road.up.y*height,pickup.z+road.up.z*height);orient(model,0,road.up,0,road.forward);model.rotateY(race.time*1.3);}}
     for(let i=0;i<this.objects.length;i++){
       const model=this.objects[i]!,item=race.items.objects[i]!;model.visible=item.active;if(!item.active)continue;model.position.set(item.x,item.y+.12,item.z);
       const kind=this.kinds.indexOf(item.kind);for(let j=0;j<model.children.length;j++)model.children[j]!.visible=j===kind;
-      const up=sampleTrack(race.course,item).up;orient(model,item.kind==='banana'?0:item.age*7,up);
+      const road=sampleTrack(race.course,item),up=road.up;orient(model,item.kind==='banana'?0:item.age*7,up,0,race.course.imported?road.forward:undefined);if(race.course.imported&&item.kind!=='banana')model.rotateY(item.age*7);
       model.scale.setScalar(item.kind==='burst'?Math.max(.1,item.radius):item.kind==='banana'&&item.age<config.items.armTime?.6:1);
       if(item.kind==='explosive'){
         const bomb=model.children[3]!;bomb.children[0]!.visible=!item.exploded;bomb.children[1]!.visible=!item.exploded;bomb.children[2]!.visible=item.exploded;bomb.children[2]!.scale.setScalar(item.radius);
@@ -88,7 +93,7 @@ export class RaceVisuals {
     if(ghostFrame){
       const build=race.player.controller.build,key=JSON.stringify(build);
       if(!this.ghost||key!==this.ghostKey){if(this.ghost){this.root.remove(this.ghost.root);disposeGroup(this.ghost.root);}this.ghost=createKart(build,true);this.ghostKey=key;this.root.add(this.ghost.root);}
-      this.ghost.root.visible=true;this.ghost.root.position.set(ghostFrame.x,ghostFrame.y+.1,ghostFrame.z);orient(this.ghost.root,ghostFrame.heading,{x:ghostFrame.upX,y:ghostFrame.upY,z:ghostFrame.upZ},ghostFrame.pitch);this.ghost.glider.visible=ghostFrame.gliding;
+      this.ghost.root.visible=true;this.ghost.root.position.set(ghostFrame.x+ghostFrame.upX*.1,ghostFrame.y+ghostFrame.upY*.1,ghostFrame.z+ghostFrame.upZ*.1);orient(this.ghost.root,ghostFrame.heading,{x:ghostFrame.upX,y:ghostFrame.upY,z:ghostFrame.upZ},ghostFrame.pitch,ghostFrame.forward);this.ghost.glider.visible=ghostFrame.gliding;
     }else if(this.ghost)this.ghost.root.visible=false;
   }
 }

@@ -1,14 +1,16 @@
 import type { CourseDefinition, CourseSample, Point, Pose, Vec3 } from '../data/types';
 import type { CourseId } from '../data/options';
 import { offsetSample, trackFrame } from './frames';
+import { createElectrodrome,sampleImported,importedPoseAt } from './electrodrome';
 
 export const courseCatalog = [
   { id: 'garden-circuit', name: 'Garden Circuit', theme: 'garden', description: 'A gentle hill, a garden ramp and a grassy inside line.', color: '#548b5b' },
   { id: 'harbour-run', name: 'Harbour Run', theme: 'harbour', description: 'Dive below the docks, dodge the cargo and choose your pier.', color: '#458fa3' },
   { id: 'sky-foundry', name: 'Sky Foundry', theme: 'foundry', description: 'Ride the banked wall, launch your glider and stick the landing.', color: '#b37c53' },
   { id: 'starlight-causeway', name: 'Starlight Causeway', theme: 'starlight', description: 'Exposed night roads, chained corners and a risky boost line.', color: '#7668b2' },
+  { id: 'electrodrome', name: 'Electrodrome', theme: 'starlight', description: 'Imported neon venue, magnetic roads and a long glider jump.', color: '#ef57cc' },
 ] as const;
-const layouts: Record<CourseId, Point[]> = {
+const layouts: Record<Exclude<CourseId,'electrodrome'>, Point[]> = {
   'garden-circuit': [[0,60],[33,60],[53,39],[50,6],[40,-20],[43,-46],[20,-63],[-12,-62],[-39,-46],[-49,-14],[-46,24],[-29,52]].map(([x,z]) => ({x:x!,z:z!})),
   'harbour-run': [[0,65],[38,65],[62,45],[58,5],[28,-14],[53,-40],[31,-63],[-10,-62],[-55,-43],[-58,-3],[-29,12],[-38,49]].map(([x,z]) => ({x:x!,z:z!})),
   'sky-foundry': [[0,61],[36,61],[68,38],[62,0],[29,-31],[7,-66],[-34,-62],[-66,-30],[-53,2],[-22,5],[-40,35],[-25,57]].map(([x,z]) => ({x:x!,z:z!})),
@@ -29,6 +31,7 @@ function elevation(id:CourseId,u:number):number {
 }
 export function createCourse(input:boolean|CourseId=false, mirrored=false, compact=false):CourseDefinition {
   const id:CourseId=typeof input==='boolean'?'garden-circuit':input;
+  if(id==='electrodrome')return createElectrodrome(mirrored);
   const short=input===true || compact;
   const legacyPocket=input===true;
   const layout=layouts[id], scale=short?.35:2.1, heightScale=short?.2:1;
@@ -82,6 +85,7 @@ function addBranch(course:CourseDefinition,id:string,from:number,to:number,offse
   course.branches.push({id,samples,width:surface==='boost'?course.width*.65:course.width*.8,surface});
 }
 export interface TrackQuery extends Point {
+  center?:Vec3;
   tangent:Point;distance:number;offset:number;normal:Point;progress:number;
   height:number;right:Vec3;up:Vec3;forward:Vec3;bank:number;traversal:CourseSample['traversal'];route:string;width:number;surface:'road'|'grass'|'boost';gap:boolean;
 }
@@ -109,6 +113,7 @@ function querySegments(course: CourseDefinition, point: Point): Segment[] {
   return index.cells.get(`${Math.floor(point.x / 16)},${Math.floor(point.z / 16)}`) ?? index.all;
 }
 export function sampleTrack(course:CourseDefinition,point:Point&{y?:number}):TrackQuery {
+  if(course.imported)return sampleImported(course,point);
   if(course.arena)return{x:point.x,z:point.z,tangent:{x:0,z:1},normal:{x:1,z:0},offset:0,distance:Math.max(0,Math.abs(point.x)-course.arena.halfSize,Math.abs(point.z)-course.arena.halfSize),progress:0,height:0,right:{x:1,y:0,z:0},up:{x:0,y:1,z:0},forward:{x:0,y:0,z:1},bank:0,traversal:'grounded',route:'arena',width:course.width,surface:'road',gap:false};
   let score=Infinity,result:TrackQuery|undefined;
   for(const segment of querySegments(course,point)) {
@@ -131,6 +136,7 @@ export function sampleTrack(course:CourseDefinition,point:Point&{y?:number}):Tra
   return result!;
 }
 export function poseAt(course:CourseDefinition,distance:number,routeId='main'):Pose {
+  if(course.imported)return importedPoseAt(course,distance);
   const d=((distance%course.length)+course.length)%course.length;
   const route=course.branches.find((entry)=>entry.id===routeId);
   const samples=route?.samples??course.samples;
@@ -145,6 +151,7 @@ export function gridPose(course:CourseDefinition,index:number):Pose {
   if(course.arena)return{...course.arena.spawns[index%course.arena.spawns.length]!};
   const pose=poseAt(course,-4-Math.floor(index/2)*4.5);
   const lane=(index%2===0?-1:1)*Math.min(2.3,course.width*.23);
+  if(course.imported){const road=sampleTrack(course,pose),side=(index%2===0?-1:1)*Math.min(1.2,road.width*.23);return{...pose,x:pose.x+road.right.x*side,y:pose.y!+road.right.y*side,z:pose.z+road.right.z*side};}
   return {...pose,x:pose.x+Math.cos(pose.heading)*lane,z:pose.z-Math.sin(pose.heading)*lane};
 }
 export function hazardPose(course:CourseDefinition,hazard:CourseDefinition['hazards'][number],time:number):Vec3 {

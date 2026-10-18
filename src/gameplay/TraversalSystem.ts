@@ -12,8 +12,9 @@ export class TraversalSystem {
   private flightTime = 0;
   private trick = false;
   private held = false;
+  private landingProgress=0;
   get airborne(): boolean { return this.flightTime > 0; }
-  reset(): void { this.cooldown = 0; this.flightTime = 0; this.trick = false; this.held = false; }
+  reset(): void { this.cooldown = 0; this.flightTime = 0; this.trick = false; this.held = false;this.landingProgress=0; }
   align(state: KartState, road: TrackQuery, dt: number): void {
     const blend = 1 - Math.exp(-7 * dt);
     state.up = normalize({ x: state.up.x + (road.up.x - state.up.x) * blend, y: state.up.y + (road.up.y - state.up.y) * blend, z: state.up.z + (road.up.z - state.up.z) * blend });
@@ -41,11 +42,13 @@ export class TraversalSystem {
       }
       state.x += state.vx * dt; state.z += state.vz * dt; state.y += state.vy * dt;
       state.speed = Math.hypot(state.vx, state.vz);
+      if(course.imported)state.forward={x:Math.sin(state.heading),y:0,z:Math.cos(state.heading)};
       const blend = Math.min(1, dt * 4);
       state.up = normalize({ x: state.up.x * (1 - blend), y: state.up.y + (1 - state.up.y) * blend, z: state.up.z * (1 - blend) });
       state.gravity = { x: 0, y: -9.8, z: 0 };
-      const landing = sampleTrack(course, state);
-      if (this.flightTime > 0.2 && state.vy <= 0 && !landing.gap && landing.distance < landing.width / 2 + 1 && state.y <= landing.height + 0.15 && state.y > landing.height - 5) {
+      const landing = sampleTrack(course, state);if(course.imported)state.trackProgress=landing.progress;
+      const validLanding=!course.imported||state.traversal!=='gliding'||(landing.progress>=this.landingProgress-12&&landing.progress<=this.landingProgress+75);
+      if (validLanding&&this.flightTime > 0.2 && state.vy <= 0 && !landing.gap && landing.distance < landing.width / 2 + 1 && state.y <= landing.height + 0.15 && state.y > landing.height - 5) {
         state.y = landing.height; state.vy = 0; state.pitch = 0; state.traversal = landing.traversal;
         this.flightTime = 0; state.trickReady = 0; const earned = this.trick; this.trick = false; return earned;
       }
@@ -54,6 +57,7 @@ export class TraversalSystem {
     }
     state.y = road.height;
     this.align(state, road, dt);
+    if(course.imported&&this.cooldown===0&&state.speed>5){const launch=course.launches.find(z=>z.glider&&road.progress>=z.from&&road.progress<=z.to);if(launch){const landing=course.samples.find(p=>p.distance>=launch.landing)!,speed=Math.max(21,Math.hypot(state.vx,state.vz));state.heading=Math.atan2(landing.x-state.x,landing.z-state.z);state.vx=Math.sin(state.heading)*speed;state.vz=Math.cos(state.heading)*speed;state.speed=speed;state.traversal='gliding';state.up={x:0,y:1,z:0};state.forward={x:Math.sin(state.heading),y:0,z:Math.cos(state.heading)};state.vy=3;state.y+=.2;this.flightTime=.001;this.cooldown=3;this.landingProgress=launch.landing;return false;}}
     if (road.surface === 'boost') state.boost = Math.max(state.boost, 0.3);
     if (road.gap) {
       state.traversal = 'falling'; this.flightTime = 0.001; state.vy = 0;
@@ -62,6 +66,7 @@ export class TraversalSystem {
     } else if (state.speed > 5 && this.cooldown === 0 && road.route === 'main') {
       const launch = course.launches.find((zone) => road.progress >= zone.from && road.progress <= zone.to);
       if (launch) {
+        if(course.imported&&launch.glider){const speed=Math.max(21,Math.hypot(state.vx,state.vz));state.vx=Math.sin(state.heading)*speed;state.vz=Math.cos(state.heading)*speed;state.speed=speed;}
         state.traversal = launch.glider ? 'gliding' : 'jumping'; this.flightTime = 0.001; this.cooldown = 3;
         state.y += 0.2; state.vy = (launch.glider ? 3 : 5) * (course.compact ? 0.45 : 1); state.trickReady = 0.25;
       }

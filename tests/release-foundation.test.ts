@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { drivers, chassis, tyres, gliders, calculateStats } from '../src/data/content';
-import { defaultSettings, courseIds } from '../src/data/options';
+import { defaultSettings, cupCourseIds } from '../src/data/options';
 import { createCup, advanceCup, cupRanking } from '../src/gameplay/Cup';
 import { SaveStore, validateSave, validateSettings } from '../src/platform/SaveStore';
 import { GhostRecorder, GhostStore, ghostKey, sampleGhost, validateGhost } from '../src/platform/Ghosts';
@@ -23,7 +23,7 @@ test('all 144 original driver and vehicle combinations have bounded usable stats
 
 test('four course layouts, mirrored geometry, local frames and explicit traversal volumes', () => {
   const lengths: number[] = [];
-  for (const id of courseIds) {
+  for (const id of cupCourseIds) {
     const course = createCourse(id), mirrored = createCourse(id, true);
     lengths.push(course.length); assert.equal(course.checkpoints.length, 12);
     for (let i = 0; i < 360; i += 7) {

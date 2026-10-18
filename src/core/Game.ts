@@ -14,6 +14,8 @@ import { SaveStore,validateSettings } from '../platform/SaveStore';
 import { GhostStore,GhostRecorder,ghostKey } from '../platform/Ghosts';
 import { Renderer } from '../rendering/Renderer';
 import { createCourse } from '../tracks/course';
+import {prepareImportedCourse} from '../rendering/importedCourse';
+import {interpolateHeading} from '../rendering/resources';
 import { Interface,formatTime } from '../ui/Interface';
 
 export class Game {
@@ -36,7 +38,7 @@ export class Game {
     this.rendering=new Renderer(document.querySelector('#world')!,this.course);this.rendering.applySettings(this.saves.data.settings);this.rendering.previewBuild(this.saves.data.settings.builds[0]);
     this.input.configure(this.saves.data.settings);this.sound.apply(this.saves.data.settings);this.ui.setCourse(this.course);
     this.ui.onStart=()=>{void this.start();};this.ui.onPause=()=>this.pause();this.ui.onRestart=()=>{void this.restart();};this.ui.onResume=()=>this.resume();this.ui.onMenu=()=>this.menu();
-    this.ui.onSettings=(settings)=>this.changeSettings(settings);this.ui.onSound=()=>this.changeSettings({...this.saves.data.settings,muted:!this.saves.data.settings.muted,masterVolume:this.saves.data.settings.masterVolume||.65});
+    this.ui.onSettings=(settings)=>this.changeSettings(settings);this.ui.onSound=()=>this.changeSettings({...this.saves.data.settings,muted:!(this.saves.data.settings.muted||this.saves.data.settings.masterVolume===0),masterVolume:this.saves.data.settings.masterVolume||.65});
     this.ui.onResumeCup=()=>{const options=this.session.resumeCup();if(options)void this.load(options);};this.ui.onContinueCup=()=>{void this.load(this.session.nextCupRace());};
     this.ui.onAbandonCup=()=>{this.session.abandonCup();this.refreshMenus();this.ui.message('Saved cup abandoned.');};
     this.ui.onPreview=(index)=>this.rendering.previewBuild(this.saves.data.settings.builds[index as 0|1]);this.ui.onTouch=(action,pressed,id)=>this.input.touch(action,pressed,id);
@@ -46,7 +48,7 @@ export class Game {
     window.addEventListener('resize',this.onResize);window.addEventListener('blur',this.onBlur);document.addEventListener('visibilitychange',this.onVisibility);document.addEventListener('open-controls',this.onControls);
     if(import.meta.env.DEV)document.addEventListener('kart:force-item',this.onForceItem);
     this.rendering.renderer.domElement.addEventListener('webglcontextlost',this.onContextLost);
-    this.setState('menu');this.refreshMenus();this.animation=requestAnimationFrame(this.frame);
+    this.setState('menu');this.refreshMenus();this.prepareMenuCourse();this.animation=requestAnimationFrame(this.frame);
   }
   private setState(state:RaceState,resetTiming=true):void{
     this.state=state;this.input.active=['countdown','racing','paused','finished'].includes(state);this.input.driving=['countdown','racing','finished'].includes(state);
@@ -60,10 +62,11 @@ export class Game {
       const course=createCourse(settings.course,settings.mirrored,this.compact),key=ghostKey(raceOptions(settings),course.version),best=this.saves.data.bests[key];this.ui.setBest(best?`Local personal best: ${formatTime(best.time)} · this vehicle, speed and course`:'No local best for this vehicle / speed / course yet.');
     }else this.ui.setBest(this.compact?'Compact verification course scale is active.':'');
   }
+  private prepareMenuCourse():void{const course=this.course;if(!course.imported)return;void prepareImportedCourse(course).then(()=>{if(this.course===course&&this.state==='menu'){this.rendering.setCourse(course);this.snapCamera=true;}}).catch(()=>{if(this.course===course&&this.state==='menu')this.ui.message('The Electrodrome model could not load. Start the course to retry, or select another course.');});}
   private changeSettings(source:Settings):void{
     const previous=this.saves.data.settings,settings=validateSettings(source);this.saves.data.settings=settings;this.saves.save();this.input.configure(settings);this.sound.apply(settings);this.rendering.applySettings(settings);
     if(this.state==='menu'){
-      if(previous.course!==settings.course||previous.mirrored!==settings.mirrored||previous.mode!==settings.mode){this.course=this.playfield(raceOptions(settings));this.rendering.setCourse(this.course);this.ui.setCourse(this.course);this.snapCamera=true;}
+      if(previous.course!==settings.course||previous.mirrored!==settings.mirrored||previous.mode!==settings.mode){this.course=this.playfield(raceOptions(settings));this.rendering.setCourse(this.course);this.ui.setCourse(this.course);this.snapCamera=true;this.prepareMenuCourse();}
       this.menuKart=new KartController(this.course,this.course.spawn,settings.builds[0],settings.speed).state;this.rendering.previewBuild(settings.builds[0]);
     }
     this.refreshMenus();
@@ -75,7 +78,7 @@ export class Game {
     const token=++this.loadToken;this.sound.unlock();this.setState('loading');this.ui.setLoading(.1,'Constructing the selected course…');
     try{
       await new Promise<void>((resolve)=>requestAnimationFrame(()=>resolve()));if(token!==this.loadToken)return;
-      this.course=this.playfield(options);this.rendering.setCourse(this.course);this.ui.setCourse(this.course);this.ui.setLoading(.5,'Assembling racers and vehicle parts…');
+      this.course=this.playfield(options);await prepareImportedCourse(this.course,progress=>{if(token===this.loadToken)this.ui.setLoading(.1+progress*.35,progress<.9?'Downloading Electrodrome…':'Preparing imported materials…');});if(token!==this.loadToken)return;this.rendering.setCourse(this.course);this.ui.setCourse(this.course);this.ui.setLoading(.5,'Assembling racers and vehicle parts…');
       await new Promise<void>((resolve)=>requestAnimationFrame(()=>resolve()));if(token!==this.loadToken)return;
       this.race=options.mode==='balloon-battle'?new Battle(this.course,4782,options):new Race(this.course,4782+(options.mode==='grand-prix'?(this.saves.data.cup?.nextRace??0)*901:0),options);
       this.recorder=options.mode==='time-trial'?new GhostRecorder():null;this.recorder?.sample(0,this.race.player.controller.state);this.completed=null;
@@ -88,7 +91,7 @@ export class Game {
   private menu():void{
     this.loadToken++;this.recorder=null;this.rendering.setGhost(null);this.sound.reset();
     const settings=this.saves.data.settings;this.course=this.playfield(raceOptions(settings));this.rendering.setCourse(this.course);this.ui.setCourse(this.course);this.rendering.previewBuild(settings.builds[0]);this.menuKart=new KartController(this.course,this.course.spawn,settings.builds[0],settings.speed).state;
-    this.snapCamera=true;this.setState('menu');this.refreshMenus();
+    this.snapCamera=true;this.setState('menu');this.refreshMenus();this.prepareMenuCourse();
   }
   private pause():void{if(['countdown','racing','finished'].includes(this.state)){this.race.pause();this.setState('paused');}}
   private resume():void{if(this.state==='paused'&&!this.graphicsLost&&!this.ui.controls.open&&!document.hidden){this.race.resume();this.sound.unlock();this.ui.resumed();this.setState(this.race.state);}}
@@ -114,8 +117,11 @@ export class Game {
       const cue=this.state==='countdown'?Math.ceil(this.race.countdown):0;if(cue!==this.countdownCue){this.countdownCue=cue;this.sound.tone(cue===0?880:440,.15);}this.sound.update(this.race);
     }
     const player=this.race.player,current=player.controller.state,previous=player.previous;
-    Object.assign(this.visual,current,{x:previous.x+(current.x-previous.x)*alpha,y:previous.y+(current.y-previous.y)*alpha,z:previous.z+(current.z-previous.z)*alpha,heading:previous.heading+(current.heading-previous.heading)*alpha});
-    const moving=this.state==='racing'||this.state==='finished';this.rendering.draw(this.state==='menu'?this.menuKart:this.visual,moving?dt:0,this.state==='menu',this.input.rearView,this.input.read().steering,this.snapCamera,this.race,alpha);this.snapCamera=false;
+    Object.assign(this.visual,current,{x:previous.x+(current.x-previous.x)*alpha,y:previous.y+(current.y-previous.y)*alpha,z:previous.z+(current.z-previous.z)*alpha,heading:interpolateHeading(previous.heading,current.heading,alpha)});
+    const moving=this.state==='racing'||this.state==='finished';
+    // The supplied home artwork covers the canvas completely. Leave the GPU
+    // idle there instead of rendering the imported venue behind an opaque UI.
+    if(this.state!=='menu'||document.body.dataset.menu!=='title'){this.rendering.draw(this.state==='menu'?this.menuKart:this.visual,moving?dt:0,this.state==='menu',this.input.rearView,this.input.read().steering,this.snapCamera,this.race,alpha);this.snapCamera=false;}
     this.ui.update(this.race,this.course,this.state==='paused'?0:dt,this.rendering.getViewports(this.race.humans.length));this.ui.settingsPanel.deviceStatus(this.input.deviceStatus);
   };
   dispose():void{this.loadToken++;cancelAnimationFrame(this.animation);this.input.dispose();this.ui.dispose();this.sound.dispose();this.rendering.dispose();window.removeEventListener('resize',this.onResize);window.removeEventListener('blur',this.onBlur);document.removeEventListener('visibilitychange',this.onVisibility);document.removeEventListener('open-controls',this.onControls);document.removeEventListener('kart:force-item',this.onForceItem);}
